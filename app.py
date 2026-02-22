@@ -8,7 +8,7 @@ from datetime import datetime
 import re
 import time
 
-# --- 1. SPOTIFY CREDENTIALS ---
+# --- 1. SPOTIFY CREDENTIALS (SECURE FOR CLOUD) ---
 SPOTIPY_CLIENT_ID = st.secrets["SPOTIPY_CLIENT_ID"]
 SPOTIPY_CLIENT_SECRET = st.secrets["SPOTIPY_CLIENT_SECRET"]
 
@@ -17,10 +17,9 @@ st.set_page_config(
     page_title="Poster Jukebox", 
     page_icon="🎵", 
     layout="centered", 
-    initial_sidebar_state="collapsed" # Hide the sidebar by default!
+    initial_sidebar_state="collapsed" 
 )
 
-# This CSS hides the Streamlit menus, headers, and makes the background pitch black for TVs
 hide_st_style = """
             <style>
             #MainMenu {visibility: hidden;}
@@ -29,7 +28,6 @@ hide_st_style = """
             .stApp {
                 background-color: #000000;
             }
-            /* Make the image center beautifully */
             [data-testid="stImage"] {
                 display: flex;
                 justify-content: center;
@@ -59,7 +57,7 @@ def get_current_song_from_cloud():
             if data and 'track' in data and 'artist' in data:
                 return data['track'], data['artist']
     except Exception:
-        pass # Stay silent on errors to not ruin the TV display
+        pass 
     return None, None
 
 # --- HELPER: WEATHER API (OPEN-METEO) ---
@@ -190,14 +188,32 @@ def create_poster(album_name, artist_name):
     code_w = int((90 / spotify_code_img.height) * spotify_code_img.width)
     poster.paste(spotify_code_img.resize((code_w, 90)), (padding, code_y), spotify_code_img.resize((code_w, 90)))
 
-    font_path = next((path for path in ["/System/Library/Fonts/Supplemental/Arial Narrow Bold.ttf", "/System/Library/Fonts/Supplemental/Arial Bold.ttf", "/Library/Fonts/Arial Bold.ttf"] if ImageFont.truetype(path, 10)), None)
+    # --- CLOUD SAFE FONT LOADER ---
+    def get_safe_font(size):
+        # We give Python a list of fonts to try (Mac first, then Linux). 
+        # If it fails, it cleanly catches the error and moves to the next one!
+        font_paths = [
+            "/System/Library/Fonts/Supplemental/Arial Narrow Bold.ttf", 
+            "/System/Library/Fonts/Supplemental/Arial Bold.ttf", 
+            "/Library/Fonts/Arial Bold.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"
+        ]
+        for path in font_paths:
+            try:
+                return ImageFont.truetype(path, size)
+            except IOError:
+                continue
+        # If all paths fail, use the built-in basic font so it never crashes again
+        return ImageFont.load_default()
+
     title_size = 34 if len(clean_name) > 30 else (38 if len(clean_name) > 20 else 42)
     artist_size = 45 if len(artist_name) > 35 else (60 if len(artist_name) > 25 else (75 if len(artist_name) > 15 else 95))
 
-    font_artist = ImageFont.truetype(font_path, artist_size) if font_path else ImageFont.load_default()
-    font_title = ImageFont.truetype(font_path, title_size) if font_path else ImageFont.load_default()
-    font_tracks = ImageFont.truetype(font_path, 34) if font_path else ImageFont.load_default()
-    font_meta = ImageFont.truetype(font_path, 19) if font_path else ImageFont.load_default()
+    font_artist = get_safe_font(artist_size)
+    font_title = get_safe_font(title_size)
+    font_tracks = get_safe_font(34)
+    font_meta = get_safe_font(19)
 
     max_text_width = (poster_w - padding) - (padding + code_w + 20)
     new_y_after_artist = draw_wrapped_text(draw, artist_name.upper(), font_artist, max_text_width, poster_w - padding, code_y - 12, "white")
@@ -230,7 +246,6 @@ def create_poster(album_name, artist_name):
     return poster
 
 # --- STREAMLIT UI ---
-# Hide the settings in the sidebar so the main screen is clean!
 st.sidebar.markdown("## ⚙️ TV Settings")
 weather_city = st.sidebar.text_input("Local City for Weather", value="London", placeholder="e.g. Manchester")
 idle_timeout_mins = st.sidebar.slider("Minutes until Standby Screen", min_value=1, max_value=15, value=5)
@@ -238,7 +253,6 @@ idle_seconds = idle_timeout_mins * 60
 live_mode = st.sidebar.toggle("📺 **CONNECT TO CLOUD REMOTE**", value=True)
 
 if live_mode:
-    # We use empty containers so we can cleanly swap between weather and posters
     display_spot = st.empty()
     
     while True:
@@ -255,7 +269,6 @@ if live_mode:
                 draw_weather_dashboard(weather_city)
             
         elif st.session_state.current_poster and not st.session_state.is_standby:
-            # Show the poster beautifully centered with no extra text
             display_spot.image(st.session_state.current_poster, use_container_width=True)
             
         # 2. FETCH FROM CLOUD SILENTLY
@@ -266,7 +279,6 @@ if live_mode:
             st.session_state.last_heard_time = time.time() 
             
             if track_found != st.session_state.last_track:
-                # NEW SONG! Pop up a sleek little notification in the corner
                 st.toast(f"Generating poster for: **{track_found}**", icon="🎨")
                 st.session_state.last_track = track_found
                 
