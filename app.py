@@ -25,35 +25,45 @@ st.set_page_config(
 
 hide_st_style = """
     <style>
-    /* 1. Hide Streamlit's default UI elements */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header[data-testid="stHeader"] { display: none !important; }
-    div[data-testid="stToolbar"] { display: none !important; }
-    div[data-testid="stDecoration"] { display: none !important; }
-    div[data-testid="stStatusWidget"] { display: none !important; }
-
-    /* 2. Force the entire page background to pitch black */
-    .stApp, html, body { 
+    /* 1. Hide top header, toolbar, and footer */
+    [data-testid="stHeader"], [data-testid="stToolbar"], footer, #MainMenu { 
+        display: none !important; 
+        visibility: hidden !important; 
+    }
+    
+    /* 2. Force the absolute background to black */
+    [data-testid="stAppViewContainer"], .stApp, html, body { 
         background-color: #000000 !important; 
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important; /* Prevents scrollbars */
     }
-
-    /* 3. Nuke Streamlit's default padding (the white border) */
+    
+    /* 3. Nuke Streamlit's default massive block padding */
     .block-container {
-        padding: 0px !important;
+        padding-top: 0rem !important;
+        padding-bottom: 0rem !important;
+        padding-left: 0rem !important;
+        padding-right: 0rem !important;
         margin: 0px !important;
-        max-width: 100% !important;
+        max-width: 100vw !important;
+    }
+    
+    /* 4. Remove invisible gaps Streamlit adds between elements */
+    [data-testid="stVerticalBlock"] {
+        gap: 0px !important;
+        padding: 0px !important;
     }
 
-    /* 4. Force the image to expand to the literal edges of the screen */
+    /* 5. Stretch the image precisely to the viewport edges */
     [data-testid="stImage"] {
         width: 100vw !important;
         height: 100vh !important;
-        display: flex;
-        justify-content: center;
-        align-items: center;
         margin: 0 !important;
         padding: 0 !important;
+        display: flex; 
+        justify-content: center; 
+        align-items: center;
     }
     
     [data-testid="stImage"] img {
