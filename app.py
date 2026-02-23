@@ -24,17 +24,33 @@ st.set_page_config(
     initial_sidebar_state="collapsed" 
 )
 
-# Nuclear Kiosk CSS (Updated to keep the sidebar button alive)
+# Nuclear Kiosk CSS (Updated with a visible white sidebar button)
 hide_st_style = """
     <style>
-    /* 1. Hide toolbar and footer, but keep the header transparent so the sidebar button works */
+    /* 1. Hide toolbar and footer */
     [data-testid="stToolbar"], footer, #MainMenu { 
         display: none !important; 
         visibility: hidden !important; 
     }
     
+    /* Make the header transparent */
     [data-testid="stHeader"] {
         background-color: transparent !important;
+    }
+    
+    /* MAKE THE SIDEBAR BUTTON VISIBLE (White icon, translucent background) */
+    [data-testid="collapsedControl"] {
+        background-color: rgba(255, 255, 255, 0.15) !important;
+        border-radius: 8px !important;
+        margin: 15px !important;
+        z-index: 99999 !important;
+    }
+    [data-testid="collapsedControl"] svg {
+        fill: white !important;
+        color: white !important;
+    }
+    [data-testid="collapsedControl"]:hover {
+        background-color: rgba(255, 255, 255, 0.3) !important;
     }
     
     /* 2. Force the absolute background to black */
@@ -78,6 +94,8 @@ hide_st_style = """
         object-fit: cover !important; 
     }
     </style>
+"""
+st.markdown(hide_st_style, unsafe_allow_html=True)
 """
 st.markdown(hide_st_style, unsafe_allow_html=True)
 # --- CLOUD PERSISTENCE HELPERS ---
