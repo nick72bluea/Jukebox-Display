@@ -92,6 +92,19 @@ hide_st_style = """
 """
 # st.markdown(hide_st_style, unsafe_allow_html=True)
 
+# Temporary Lifeboat CSS for visibility
+st.markdown("""
+    <style>
+    h1, h2, h3, p, div {
+        color: #000000 !important;
+        font-weight: bold !important;
+    }
+    .stApp {
+        background-color: #FFFFFF !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 # --- CLOUD PERSISTENCE HELPERS ---
 def get_saved_venue():
     return st.query_params.get("venue_id", None)
