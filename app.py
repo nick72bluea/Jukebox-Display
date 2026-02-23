@@ -21,39 +21,42 @@ st.set_page_config(
     page_title="Jukebox Funk TV", 
     page_icon="🎵", 
     layout="wide",
-    initial_sidebar_state="collapsed" 
+    initial_sidebar_state="expanded" 
 )
 
-# Nuclear Kiosk CSS (Updated with a visible white sidebar button)
+# Bulletproof Kiosk CSS (Targets the button directly regardless of version)
 hide_st_style = """
     <style>
-    /* 1. Hide toolbar and footer */
-    [data-testid="stToolbar"], footer, #MainMenu { 
+    /* 1. Hide only the top right tools (Deploy, GitHub, Menu) */
+    [data-testid="stToolbar"], .stAppDeployButton, #MainMenu, footer { 
         display: none !important; 
-        visibility: hidden !important; 
     }
     
-    /* Make the header transparent */
+    /* 2. Keep the header container but make it 100% invisible */
     [data-testid="stHeader"] {
         background-color: transparent !important;
+        background: transparent !important;
+        z-index: 999999 !important; /* Force header to absolute front */
     }
     
-    /* MAKE THE SIDEBAR BUTTON VISIBLE (White icon, translucent background) */
-    [data-testid="collapsedControl"] {
-        background-color: rgba(255, 255, 255, 0.15) !important;
+    /* 3. Force the ONLY button left in the header (the sidebar toggle) to be highly visible */
+    [data-testid="stHeader"] button {
+        background-color: rgba(255, 255, 255, 0.85) !important;
         border-radius: 8px !important;
-        margin: 15px !important;
-        z-index: 99999 !important;
-    }
-    [data-testid="collapsedControl"] svg {
-        fill: white !important;
-        color: white !important;
-    }
-    [data-testid="collapsedControl"]:hover {
-        background-color: rgba(255, 255, 255, 0.3) !important;
+        margin: 10px !important;
+        border: 2px solid black !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+        display: inline-flex !important;
     }
     
-    /* 2. Force the absolute background to black */
+    /* Force the arrow inside to be pitch black */
+    [data-testid="stHeader"] button svg {
+        fill: #000000 !important;
+        color: #000000 !important;
+    }
+    
+    /* 4. True Black Background */
     [data-testid="stAppViewContainer"], .stApp, html, body { 
         background-color: #000000 !important; 
         margin: 0 !important;
@@ -61,23 +64,14 @@ hide_st_style = """
         overflow: hidden !important; 
     }
     
-    /* 3. Nuke Streamlit's default massive block padding */
+    /* 5. Nuke Streamlit's default massive padding */
     .block-container {
-        padding-top: 0rem !important;
-        padding-bottom: 0rem !important;
-        padding-left: 0rem !important;
-        padding-right: 0rem !important;
+        padding: 0px !important;
         margin: 0px !important;
         max-width: 100vw !important;
     }
     
-    /* 4. Remove invisible gaps Streamlit adds between elements */
-    [data-testid="stVerticalBlock"] {
-        gap: 0px !important;
-        padding: 0px !important;
-    }
-
-    /* 5. Stretch the image precisely to the viewport edges */
+    /* 6. Edge-to-Edge Image */
     [data-testid="stImage"] {
         width: 100vw !important;
         height: 100vh !important;
@@ -86,6 +80,7 @@ hide_st_style = """
         display: flex; 
         justify-content: center; 
         align-items: center;
+        z-index: 1 !important; /* Push image underneath the header */
     }
     
     [data-testid="stImage"] img {
@@ -523,4 +518,36 @@ else:
                     st.session_state.last_orientation = display_orientation
                     st.session_state.is_standby = False
                     
-                    if song
+                    if song_changed:
+                        st.toast(f"Generating poster for: **{track_found}**", icon="🎨")
+                    else:
+                        st.toast(f"Redrawing layout to **{display_orientation}**...", icon="🔄")
+                    
+                    album_found = get_album_from_track(track_found, artist_found)
+                    if album_found:
+                        new_poster = create_poster(album_found, artist_found, display_orientation)
+                        if new_poster:
+                            st.session_state.current_poster = new_poster
+                            if song_changed:
+                                st.toast(f"Now Displaying: {album_found}", icon="✅")
+                    needs_rerun = True
+
+            time_since_last_song = time.time() - st.session_state.last_heard_time
+            if time_since_last_song > (idle_timeout_mins * 60):
+                if not st.session_state.is_standby:
+                    st.session_state.is_standby = True
+                    st.session_state.current_poster = None
+                    st.session_state.last_track = None
+                    st.toast("💤 Entering Standby Mode", icon="☁️")
+                    needs_rerun = True
+                    
+            if needs_rerun:
+                st.rerun()
+                
+        background_listener()
+
+    else:
+        if st.session_state.current_poster:
+            st.image(st.session_state.current_poster, use_container_width=True)
+        else:
+            st.markdown("<h3 style='color:gray;text-align:center;margin-top:200px;'>Manual Mode Active<br><span style='font-size: 0.6em; font-weight: normal;'>Use the sidebar to generate a poster.</span></h3>", unsafe_allow_html=True)
