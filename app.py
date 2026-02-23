@@ -96,8 +96,7 @@ hide_st_style = """
     </style>
 """
 st.markdown(hide_st_style, unsafe_allow_html=True)
-"""
-st.markdown(hide_st_style, unsafe_allow_html=True)
+
 # --- CLOUD PERSISTENCE HELPERS ---
 def get_saved_venue():
     return st.query_params.get("venue_id", None)
@@ -524,36 +523,4 @@ else:
                     st.session_state.last_orientation = display_orientation
                     st.session_state.is_standby = False
                     
-                    if song_changed:
-                        st.toast(f"Generating poster for: **{track_found}**", icon="🎨")
-                    else:
-                        st.toast(f"Redrawing layout to **{display_orientation}**...", icon="🔄")
-                    
-                    album_found = get_album_from_track(track_found, artist_found)
-                    if album_found:
-                        new_poster = create_poster(album_found, artist_found, display_orientation)
-                        if new_poster:
-                            st.session_state.current_poster = new_poster
-                            if song_changed:
-                                st.toast(f"Now Displaying: {album_found}", icon="✅")
-                    needs_rerun = True
-
-            time_since_last_song = time.time() - st.session_state.last_heard_time
-            if time_since_last_song > (idle_timeout_mins * 60):
-                if not st.session_state.is_standby:
-                    st.session_state.is_standby = True
-                    st.session_state.current_poster = None
-                    st.session_state.last_track = None
-                    st.toast("💤 Entering Standby Mode", icon="☁️")
-                    needs_rerun = True
-                    
-            if needs_rerun:
-                st.rerun()
-                
-        background_listener()
-
-    else:
-        if st.session_state.current_poster:
-            st.image(st.session_state.current_poster, use_container_width=True)
-        else:
-            st.markdown("<h3 style='color:gray;text-align:center;margin-top:200px;'>Manual Mode Active<br><span style='font-size: 0.6em; font-weight: normal;'>Use the sidebar to generate a poster.</span></h3>", unsafe_allow_html=True)
+                    if song
