@@ -11,8 +11,8 @@ import random
 import string
 
 # --- 1. CONFIG & CREDENTIALS ---
-SPOTIPY_CLIENT_ID = st.secrets["SPOTIPY_CLIENT_ID"]
-SPOTIPY_CLIENT_SECRET = st.secrets["SPOTIPY_CLIENT_SECRET"]
+SPOTIPY_CLIENT_ID = '02c1d6fcc3a149138d815e4036c0c36e'
+SPOTIPY_CLIENT_SECRET = '7e96739194134d83ba322af5cefd9af4'
 FIREBASE_BASE = "https://posterjukebox-default-rtdb.europe-west1.firebasedatabase.app"
 
 # --- PAGE SETUP & KIOSK MODE CSS ---
@@ -24,14 +24,45 @@ st.set_page_config(
 )
 
 hide_st_style = """
-            <style>
-            #MainMenu {visibility: hidden;}
-            footer {visibility: hidden;}
-            header[data-testid="stHeader"] { background: rgba(0,0,0,0) !important; }
-            .stApp { background-color: #000000; }
-            [data-testid="stImage"] { display: flex; justify-content: center; align-items: center; }
-            </style>
-            """
+    <style>
+    /* 1. Hide Streamlit's default UI elements */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header[data-testid="stHeader"] { display: none !important; }
+    div[data-testid="stToolbar"] { display: none !important; }
+    div[data-testid="stDecoration"] { display: none !important; }
+    div[data-testid="stStatusWidget"] { display: none !important; }
+
+    /* 2. Force the entire page background to pitch black */
+    .stApp, html, body { 
+        background-color: #000000 !important; 
+    }
+
+    /* 3. Nuke Streamlit's default padding (the white border) */
+    .block-container {
+        padding: 0px !important;
+        margin: 0px !important;
+        max-width: 100% !important;
+    }
+
+    /* 4. Force the image to expand to the literal edges of the screen */
+    [data-testid="stImage"] {
+        width: 100vw !important;
+        height: 100vh !important;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    
+    [data-testid="stImage"] img {
+        width: 100vw !important;
+        height: 100vh !important;
+        object-fit: cover !important; 
+    }
+    </style>
+"""
 st.markdown(hide_st_style, unsafe_allow_html=True)
 
 # --- CLOUD PERSISTENCE HELPERS (URL PARAMETERS) ---
