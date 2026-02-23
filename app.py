@@ -90,7 +90,7 @@ hide_st_style = """
     }
     </style>
 """
-st.markdown(hide_st_style, unsafe_allow_html=True)
+# st.markdown(hide_st_style, unsafe_allow_html=True)
 
 # --- CLOUD PERSISTENCE HELPERS ---
 def get_saved_venue():
