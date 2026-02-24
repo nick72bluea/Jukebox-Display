@@ -29,7 +29,21 @@ SPOTIPY_CLIENT_SECRET = get_secret("SPOTIPY_CLIENT_SECRET")
 raw_firebase = get_secret("FIREBASE_BASE", "")
 FIREBASE_BASE = raw_firebase.strip().rstrip('/')
 
+service_account_info = os.environ.get("FIREBASE_SERVICE_ACCOUNT")
 
+if service_account_info:
+    # 2. Parse the string into a real dictionary
+    cert_dict = json.loads(service_account_info)
+    
+    # 3. Initialize the Admin SDK (only if not already initialized)
+    if not firebase_admin._apps:
+        cred = credentials.Certificate(cert_dict)
+        firebase_admin.initialize_app(cred, {
+            'databaseURL': 'https://posterjukebox-default-rtdb.europe-west1.firebasedatabase.app'
+        })
+    print("✅ Firebase Admin SDK Initialized")
+else:
+    print("❌ Could not find FIREBASE_SERVICE_ACCOUNT in environment")
 
 # --- PAGE SETUP & KIOSK MODE CSS ---
 st.set_page_config(
