@@ -22,7 +22,7 @@ def get_secret(key):
 
 SPOTIPY_CLIENT_ID = get_secret("SPOTIPY_CLIENT_ID")
 SPOTIPY_CLIENT_SECRET = get_secret("SPOTIPY_CLIENT_SECRET")
-FIREBASE_BASE = get_secret("FIREBASE_BASE")
+FIREBASE_BASE =  "https://posterjukebox-default-rtdb.europe-west1.firebasedatabase.app"
 
 # --- PAGE SETUP & KIOSK MODE CSS ---
 st.set_page_config(
