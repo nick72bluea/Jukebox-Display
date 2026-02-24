@@ -43,25 +43,53 @@ SPOTIPY_CLIENT_SECRET = load_key("SPOTIPY_CLIENT_SECRET")
 FIREBASE_BASE = "https://posterjukebox-default-rtdb.europe-west1.firebasedatabase.app"
 
 # ==========================================
-# --- 2. PAGE SETUP & FIXED SIDEBAR CSS ---
+# --- 2. THE "SLICK DARK" SIDEBAR CSS ---
 # ==========================================
 
 st.set_page_config(page_title="Jukebox Funk TV", layout="wide")
 
-# This CSS fixes the "Unreadable Sidebar" and keeps the TV looking clean
 st.markdown("""
     <style>
-    /* Make Sidebar Text Visible */
-    section[data-testid="stSidebar"] { background-color: #f0f2f6 !important; }
-    section[data-testid="stSidebar"] .stMarkdown, 
-    section[data-testid="stSidebar"] label,
-    section[data-testid="stSidebar"] p {
-        color: #000000 !important;
-        font-weight: bold !important;
+    /* Main TV Area */
+    [data-testid="stAppViewContainer"], .stApp {
+        background-color: #000000 !important;
     }
-    /* Kiosk Style for Main App */
-    [data-testid="stAppViewContainer"] { background-color: #000000 !important; }
-    .stAppDeployButton, footer { display: none !important; }
+    
+    /* Sidebar: Pure Black Background */
+    [data-testid="stSidebar"] {
+        background-color: #000000 !important;
+        border-right: 1px solid #222222;
+    }
+
+    /* Sidebar Text: Light Grey/Silver */
+    [data-testid="stSidebar"] .stMarkdown, 
+    [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h3 {
+        color: #AAAAAA !important;
+        font-family: 'Inter', sans-serif;
+    }
+
+    /* Sidebar Inputs */
+    [data-testid="stSidebar"] input {
+        background-color: #1A1A1A !important;
+        color: #FFFFFF !important;
+        border: 1px solid #333333 !important;
+    }
+
+    /* Sidebar Buttons */
+    [data-testid="stSidebar"] button {
+        background-color: #1A1A1A !important;
+        color: #AAAAAA !important;
+        border: 1px solid #333333 !important;
+    }
+
+    /* Hide Streamlit Bloat */
+    [data-testid="stToolbar"], .stAppDeployButton, footer {
+        display: none !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -69,23 +97,12 @@ st.markdown("""
 # --- 3. HELPERS ---
 # ==========================================
 
-def log_event(venue_id, action, details=""):
-    if db:
-        try:
-            db.collection("logs").add({
-                "venue_id": venue_id, "action": action, "details": details,
-                "timestamp": firestore.SERVER_TIMESTAMP
-            })
-        except: pass
-
 def get_saved_venue(): return st.query_params.get("venue_id", None)
 def save_connection(vid): st.query_params["venue_id"] = vid
-def clear_connection(): 
-    if "venue_id" in st.query_params:
-        st.query_params.clear()
+def clear_connection(): st.query_params.clear()
 
 # ==========================================
-# --- 4. API & ENGINE ---
+# --- 4. ENGINE ---
 # ==========================================
 
 def get_current_song_from_cloud(venue_id):
@@ -99,7 +116,10 @@ def get_current_song_from_cloud(venue_id):
 def create_poster(album_name, artist_name, orientation="Portrait"):
     try:
         sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(client_id=SPOTIPY_CLIENT_ID, client_secret=SPOTIPY_CLIENT_SECRET))
-        results = sp.search(q=f"album:{album_name} artist:{artist_name}", type='album', limit=1)
+        # Search strategy: use album if provided, otherwise search for top album by artist
+        query = f"album:{album_name} artist:{artist_name}" if album_name else f"artist:{artist_name}"
+        results = sp.search(q=query, type='album', limit=1)
+        
         if not results['albums']['items']: return None
         
         cover_url = results['albums']['items'][0]['images'][0]['url']
@@ -115,20 +135,20 @@ def create_poster(album_name, artist_name, orientation="Portrait"):
     except: return None
 
 # ==========================================
-# --- 5. APP LOGIC ---
+# --- 5. LOGIC & UI ---
 # ==========================================
 
 venue_id = get_saved_venue()
 
 if not venue_id:
-    # --- PAIRING SCREEN ---
+    # PAIRING ROOM
     if 'pair_code' not in st.session_state:
         st.session_state.pair_code = ''.join(random.choices(string.digits, k=6))
         requests.put(f"{FIREBASE_BASE}/pairing_codes/{st.session_state.pair_code}.json", 
                      json={"status": "waiting", "timestamp": time.time()})
 
-    st.markdown(f"<h1 style='text-align: center; color: white; margin-top: 20vh;'>LINK YOUR DISPLAY</h1>", unsafe_allow_html=True)
-    st.markdown(f"<h1 style='text-align: center; color: #7C3AED; font-size: 8rem;'>{st.session_state.pair_code}</h1>", unsafe_allow_html=True)
+    st.markdown(f"<h1 style='text-align: center; color: #666666; margin-top: 25vh;'>LINK DISPLAY</h1>", unsafe_allow_html=True)
+    st.markdown(f"<h1 style='text-align: center; color: #FFFFFF; font-size: 8rem;'>{st.session_state.pair_code}</h1>", unsafe_allow_html=True)
     
     time.sleep(3)
     res = requests.get(f"{FIREBASE_BASE}/pairing_codes/{st.session_state.pair_code}.json").json()
@@ -138,41 +158,43 @@ if not venue_id:
     st.rerun()
 
 else:
-    # --- MAIN SIDEBAR (RESTORED FEATURES) ---
+    # MAIN CONTROL PANEL
     with st.sidebar:
-        st.header("⚙️ Controls")
-        if st.button("🔴 Unpair Display", use_container_width=True):
+        st.subheader("⚙️ CONTROLS")
+        if st.button("🔴 UNPAIR DISPLAY", use_container_width=True):
             clear_connection()
             st.rerun()
         
         st.divider()
-        mode = st.radio("Poster Source", ["Live Cloud Sync", "Manual Search"])
-        orientation = st.radio("Orientation", ["Portrait", "Landscape"], index=0)
+        mode = st.radio("POSTER MODE", ["Live Sync", "Manual Search"])
+        orientation = st.radio("LAYOUT", ["Portrait", "Landscape"])
         
-        if mode == "Manual Search":
-            m_artist = st.text_input("Artist")
-            m_album = st.text_input("Album")
-            if st.button("Generate Poster"):
-                st.session_state.current_poster = create_poster(m_album, m_artist, orientation)
-    
-    # --- DISPLAY AREA ---
-    if mode == "Live Cloud Sync":
+        st.divider()
+        # RESTORED MANUAL FIELDS
+        st.write("🔍 MANUAL SEARCH")
+        manual_artist = st.text_input("Artist Name", placeholder="e.g. Fleetwood Mac")
+        manual_album = st.text_input("Album Name (Optional)", placeholder="e.g. Rumours")
+        
+        if st.button("🚀 GENERATE POSTER", use_container_width=True):
+            with st.spinner("Fetching..."):
+                st.session_state.current_poster = create_poster(manual_album, manual_artist, orientation)
+                st.session_state.last_mode = "Manual"
+
+    # DISPLAY AREA
+    if mode == "Live Sync":
         if st.session_state.get('current_poster'):
             st.image(st.session_state.current_poster, use_container_width=True)
             
         @st.fragment(run_every=3)
-        def sync():
+        def sync_loop():
             track, artist = get_current_song_from_cloud(venue_id)
             if track and track != st.session_state.get('last_track'):
                 st.session_state.last_track = track
-                # Try to find album name for better search
-                sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(client_id=SPOTIPY_CLIENT_ID, client_secret=SPOTIPY_CLIENT_SECRET))
-                res = sp.search(q=f"track:{track} artist:{artist}", type='track', limit=1)
-                album = res['tracks']['items'][0]['album']['name'] if res['tracks']['items'] else track
-                st.session_state.current_poster = create_poster(album, artist, orientation)
+                # Auto-fetch poster
+                st.session_state.current_poster = create_poster(track, artist, orientation)
                 st.rerun()
-        sync()
+        sync_loop()
     else:
-        # Manual Display
+        # Show manually generated poster
         if st.session_state.get('current_poster'):
             st.image(st.session_state.current_poster, use_container_width=True)
