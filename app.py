@@ -411,8 +411,7 @@ with st.expander("🛠 Server Connection Debug"):
         st.error(f"❌ Connection Failed: {str(e)}")
 # ---------------------------------
 
-if not current_venue_id or not current_display_id:
-    # Your existing pairing logic follows...
+
 
 if not current_venue_id or not current_display_id:
     # --- BUG FIX: BANISH THE SIDEBAR ---
