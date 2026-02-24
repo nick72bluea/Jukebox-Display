@@ -395,6 +395,25 @@ def create_poster(album_name, artist_name, orientation="Portrait"):
 current_venue_id = get_saved_venue()
 current_display_id = get_saved_display()
 
+
+# --- ADD THIS DEBUG BLOCK HERE ---
+with st.expander("🛠 Server Connection Debug"):
+    st.write(f"Attempting to connect to: {FIREBASE_BASE}")
+    try:
+        # Shallow check to see if Firebase is reachable
+        test_res = requests.get(f"{FIREBASE_BASE}/.json?shallow=true", timeout=5)
+        st.write(f"Firebase Response Code: {test_res.status_code}")
+        if test_res.status_code == 200:
+            st.success("✅ Connection to Firebase is LIVE")
+        else:
+            st.error(f"❌ Firebase returned an error: {test_res.status_code}")
+    except Exception as e:
+        st.error(f"❌ Connection Failed: {str(e)}")
+# ---------------------------------
+
+if not current_venue_id or not current_display_id:
+    # Your existing pairing logic follows...
+
 if not current_venue_id or not current_display_id:
     # --- BUG FIX: BANISH THE SIDEBAR ---
     st.markdown("""
