@@ -1,6 +1,6 @@
 streamlit
-pandas
-google-cloud-firestore
-firebase-admin
-Pillow
+spotipy
 requests
+Pillow
+firebase-admin
+google-cloud-firestore
