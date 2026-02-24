@@ -44,18 +44,26 @@ db = firestore.client() if firebase_admin._apps else None
 # Spotify Credentials
 # Looks in Streamlit secrets first, then environment variables (for Render)
 # --- Safe Credential Loading ---
-def get_secret(key):
-    # Try Render Environment Variable first
-    if key in os.environ:
-        return os.environ.get(key)
-    # Fallback to Streamlit secrets (local Mac testing)
-    try:
-        return st.secrets[key]
-    except:
-        return None
+# ==========================================
+# --- 1b. SAFE CREDENTIAL LOADING ---
+# ==========================================
 
-SPOTIPY_CLIENT_ID = get_secret("SPOTIPY_CLIENT_ID")
-SPOTIPY_CLIENT_SECRET = get_secret("SPOTIPY_CLIENT_SECRET")
+def load_key(key_name):
+    # 1. Check Render Environment Variables first
+    if key_name in os.environ:
+        return os.environ.get(key_name)
+    
+    # 2. Check Streamlit Secrets (for local Mac testing)
+    try:
+        if key_name in st.secrets:
+            return st.secrets[key_name]
+    except:
+        pass
+    
+    return None
+
+SPOTIPY_CLIENT_ID = load_key("SPOTIPY_CLIENT_ID")
+SPOTIPY_CLIENT_SECRET = load_key("SPOTIPY_CLIENT_SECRET")
 
 # Legacy RTDB URL (Keeping your current pairing system alive)
 FIREBASE_BASE = "https://posterjukebox-default-rtdb.europe-west1.firebasedatabase.app"
