@@ -9,9 +9,8 @@ import re
 import time
 import random
 import string
+import os
 
-# --- 1. CONFIG & CREDENTIALS ---
-# Using Streamlit Secrets to protect API keys in the cloud
 # --- 1. CONFIG & CREDENTIALS (SECURITY LAYER) ---
 def get_secret(key, default=None):
     """Universal fetcher for Environment Variables (Render) or Secrets (Streamlit)."""
@@ -29,6 +28,7 @@ SPOTIPY_CLIENT_SECRET = get_secret("SPOTIPY_CLIENT_SECRET")
 # This ensures no trailing slashes or spaces cause a 404
 raw_firebase = get_secret("FIREBASE_BASE", "")
 FIREBASE_BASE = raw_firebase.strip().rstrip('/')
+
 
 
 # --- PAGE SETUP & KIOSK MODE CSS ---
