@@ -11,6 +11,10 @@ import random
 import string
 import os
 
+import json
+import firebase_admin
+from firebase_admin import credentials, db
+
 # --- 1. CONFIG & CREDENTIALS (SECURITY LAYER) ---
 def get_secret(key, default=None):
     """Universal fetcher for Environment Variables (Render) or Secrets (Streamlit)."""
