@@ -5,6 +5,7 @@ import os
 
 sys.path.append(os.path.dirname(__file__))
 
+import time, random, string
 from cloud_utils import init_firebase, get_current_song, get_secret, log_manual_history
 from poster_engine import create_poster, get_album_from_track
 from weather_utils import draw_weather_dashboard
