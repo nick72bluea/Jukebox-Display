@@ -3,13 +3,14 @@ import firebase_admin
 from firebase_admin import credentials, db
 import os
 import json
+import time
+from datetime import datetime
 
 def get_secret(key, default=None):
     """Retrieves secret from environment or Streamlit secrets."""
     if key in os.environ:
         return os.environ.get(key)
     try:
-        # This handles both the flat key and the dictionary block
         return st.secrets[key]
     except Exception:
         return default
@@ -19,24 +20,18 @@ def init_firebase():
     if firebase_admin._apps:
         return True
         
-    # Look for the [FIREBASE_SERVICE_ACCOUNT] block from your Secrets
     service_account_info = get_secret("FIREBASE_SERVICE_ACCOUNT")
     db_url = "https://posterjukebox-default-rtdb.europe-west1.firebasedatabase.app"
     
     if not service_account_info:
-        st.error("❌ FIREBASE_SERVICE_ACCOUNT block not found in Secrets.")
         return False
 
     try:
-        # Streamlit converts TOML sections into AttrDict/Dict automatically.
-        # If it's a string (old JSON way), we parse it. If it's a dict, we use it directly.
         if isinstance(service_account_info, str):
             cert_dict = json.loads(service_account_info)
         else:
-            # This converts the Streamlit Secret object to a standard Python dict
             cert_dict = dict(service_account_info)
         
-        # Ensure the private key handles the newline characters correctly
         if "private_key" in cert_dict:
             cert_dict["private_key"] = cert_dict["private_key"].replace("\\n", "\n")
             
@@ -46,3 +41,28 @@ def init_firebase():
     except Exception as e:
         st.error(f"❌ Firebase Init Failed: {e}")
         return False
+
+def get_current_song(venue_id):
+    """Fetches the track and artist currently playing at the venue."""
+    try:
+        ref = db.reference(f"venues/{venue_id}/now_playing")
+        data = ref.get()
+        if data:
+            return data.get('track'), data.get('artist')
+    except Exception:
+        pass
+    return None, None
+
+def log_manual_history(venue_id, album, artist):
+    """Logs a manually searched album to the venue history."""
+    try:
+        record_id = str(int(time.time() * 1000))
+        db.reference(f"venues/{venue_id}/history/{record_id}").set({
+            "id": record_id,
+            "track": album,
+            "artist": artist,
+            "time": datetime.now().strftime("%H:%M"),
+            "type": "manual"
+        })
+    except Exception:
+        pass
