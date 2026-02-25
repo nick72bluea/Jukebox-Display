@@ -18,9 +18,35 @@ def init_firebase():
         return True
     
     # HARDCODED TEST - Paste your key exactly as it appears in the JSON
-    test_key = """-----BEGIN PRIVATE KEY-----
-\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC/9lBnwRqZrU1P\ncLK2CMyxIOuIIpzz1YLtyi7t3yJTPXAXylwkQP9sr6Qwfd4AxY+5BzoQw5QX+jdC\nceTYnQn28U0kI05uuVEl3e5GLnWM8cVh7E0YQB50yOSK81yzU25h/yZOoQJuFd8z\n/n5w4LJhUSa3FxXsx4Tf3tHhPGtSiXRd6OPScSomN/UXSZeGb2dbXFwtLjtPyUhY\nXCHc8gmyQEkJ2SzplnzgniWW4MrimhJ5MZ7zU6uzZFgc4lRLkRL4k/jMJZVo/kaA\nLI5Lv/9m+8al8x5ZAhJLQqZnmr5G2ia8HMWhK5OBowaY9wvsDSSshcixlqsQ3J2t\n7HQlqafrAgMBAAECggEAV8u6HpoNJnhCwbCTq/n+VIzv7IWYL1VZ2pP8PsMtGdEh\nsV/WIKaxq+3xNFR88vFouIF7pyssUoMYPwWEWyYH5q+aTorvVmjfmmgUkHizPtFd\nK1o+MHcy9sri7EI+Ba6E78EYriGp0NukCE2/WrUKIMRS5q5iUrc2KIXqjA9sLoTw\nrM4LtWdgO5cmDSmB8Dh+WDbeE0JVCCZ8IG+OBvAU0ZHrD9QU+v7rIznE1XxorG3W\nhOZ6ZBz8TR/+kdYpFB39cFx4gsvSr091QQspSbYPJU/0NVc0BTZxNtF25s+4KVSE\nz8DoPGLqczwQgXU+c6VgzQcvlhOtTU/+io6lpuwXYQKBgQDhBOrfx1NSNnohs21w\neHTixyTAffewGrqz/GWbcuYmE9rEiZGzhTWhXW6ufWr5vABk/XXntTuKOpdMiWoP\nhUvf+f3Ia+n+KIATBnnrS97o8AW4tq5/bT3vg5i92MeMD94ZCNWbbXcFVa5e/xTK\n0OqD3IJQOCzpylFvhCxUGTNYSQKBgQDaZEKGcrTYyEWBxawXzZymfymZTxv2aAyc\n4AFm6WwK9djugsfIhXdNJ3v9Xb3HpXXDqnWrtR+OwhhTbBLdf1+CKgIwCmDiVReN\nvyXDU8n8fTh9BX7+XmD9yaxr+vrD/wUWoa+82jkD2Dwo8jJ4PMUnkJcVW1bEBGkE\nxR0HjrpGkwKBgQDA9f6UN9HzxlOlYsCOmj1h23RgvaURl1pTzjUzwKwsKwqHT5Fq\naOk8n2qyp0p9LgMIl3HsaTXNq8DjGVOiS6RtRWuj2yallQV/SyZx6HYXOv0tETtC\neuOJ6UeqRaOZMGI9BZ5n0s8l+/uz6vphkhYJTadSM1oQgjajcqyw0Yt+QQKBgEM7\nun9JsQNMJJnfESwC0McxPs1D3YfuYHOrQsM7+VcmeLJ08Kx66k+GaFWIFnTwK2Eh\niThjemOovXRxQR2PqQeZhzLi/xCuwaGRxz5q/TQOGOXkW0RUKef3vm0/xxOv3xEo\nlcG+LO9SErNIXOFHVCrqCJk6lWujL/GX/WfmONKhAoGBAIEl1xF2HGmqtiHbbQTt\nuwHGPb0f9mJL+rv+KWQZDwHoEHsmPVqLFzqR1uNsm4X1AgOYSMHxLp6U4c5kNmrk\n2mZpzSiSVP8H3wJKll+lIhzEfcMWLz9AcFJNBPAzfOTHQGgVCu/MXKk2fNQkBmwU\niFtfrfnZaA44qXNHhBa3CorQ\n
------END PRIVATE KEY-----"""
+    # HARDCODED TEST
+    test_key = "-----BEGIN PRIVATE KEY-----\n" + \
+               "MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC/9lBnwRqZrU1P\n" + \
+               "cLK2CMyxIOuIIpzz1YLtyi7t3yJTPXAXylwkQP9sr6Qwfd4AxY+5BzoQw5QX+jdC\n" + \
+               "ceTYnQn28U0kI05uuVEl3e5GLnWM8cVh7E0YQB50yOSK81yzU25h/yZOoQJuFd8z\n" + \
+               "n5w4LJhUSa3FxXsx4Tf3tHhPGtSiXRd6OPScSomN/UXSZeGb2dbXFwtLjtPyUhY\n" + \
+               "XCHc8gmyQEkJ2SzplnzgniWW4MrimhJ5MZ7zU6uzZFgc4lRLkRL4k/jMJZVo/kaA\n" + \
+               "LI5Lv/9m+8al8x5ZAhJLQqZnmr5G2ia8HMWhK5OBowaY9wvsDSSshcixlqsQ3J2t\n" + \
+               "7HQlqafrAgMBAAECggEAV8u6HpoNJnhCwbCTq/n+VIzv7IWYL1VZ2pP8PsMtGdEh\n" + \
+               "sV/WIKaxq+3xNFR88vFouIF7pyssUoMYPwWEWyYH5q+aTorvVmjfmmgUkHizPtFd\n" + \
+               "K1o+MHcy9sri7EI+Ba6E78EYriGp0NukCE2/WrUKIMRS5q5iUrc2KIXqjA9sLoTw\n" + \
+               "rM4LtWdgO5cmDSmB8Dh+WDbeE0JVCCZ8IG+OBvAU0ZHrD9QU+v7rIznE1XxorG3W\n" + \
+               "hOZ6ZBz8TR/+kdYpFB39cFx4gsvSr091QQspSbYPJU/0NVc0BTZxNtF25s+4KVSE\n" + \
+               "z8DoPGLqczwQgXU+c6VgzQcvlhOtTU/+io6lpuwXYQKBgQDhBOrfx1NSNnohs21w\n" + \
+               "eHTixyTAffewGrqz/GWbcuYmE9rEiZGzhTWhXW6ufWr5vABk/XXntTuKOpdMiWoP\n" + \
+               "hUvf+f3Ia+n+KIATBnnrS97o8AW4tq5/bT3vg5i92MeMD94ZCNWbbXcFVa5e/xTK\n" + \
+               "0OqD3IJQOCzpylFvhCxUGTNYSQKBgQDaZEKGcrTYyEWBxawXzZymfymZTxv2aAyc\n" + \
+               "4AFm6WwK9djugsfIhXdNJ3v9Xb3HpXXDqnWrtR+OwhhTbBLdf1+CKgIwCmDiVReN\n" + \
+               "vyXDU8n8fTh9BX7+XmD9yaxr+vrD/wUWoa+82jkD2Dwo8jJ4PMUnkJcVW1bEBGkE\n" + \
+               "xR0HjrpGkwKBgQDA9f6UN9HzxlOlYsCOmj1h23RgvaURl1pTzjUzwKwsKwqHT5Fq\n" + \
+               "naOk8n2qyp0p9LgMIl3HsaTXNq8DjGVOiS6RtRWuj2yallQV/SyZx6HYXOv0tETtC\n" + \
+               "euOJ6UeqRaOZMGI9BZ5n0s8l+/uz6vphkhYJTadSM1oQgjajcqyw0Yt+QQKBgEM7\n" + \
+               "un9JsQNMJJnfESwC0McxPs1D3YfuYHOrQsM7+VcmeLJ08Kx66k+GaFWIFnTwK2Eh\n" + \
+               "iThjemOovXRxQR2PqQeZhzLi/xCuwaGRxz5q/TQOGOXkW0RUKef3vm0/xxOv3xEo\n" + \
+               "lcG+LO9SErNIXOFHVCrqCJk6lWujL/GX/WfmONKhAoGBAIEl1xF2HGmqtiHbbQTt\n" + \
+               "nuwHGPb0f9mJL+rv+KWQZDwHoEHsmPVqLFzqR1uNsm4X1AgOYSMHxLp6U4c5kNmrk\n" + \
+               "2mZpzSiSVP8H3wJKll+lIhzEfcMWLz9AcFJNBPAzfOTHQGgVCu/MXKk2fNQkBmwU\n" + \
+               "iFtfrfnZaA44qXNHhBa3CorQ\n" + \
+               "-----END PRIVATE KEY-----"
 
     cert_dict = {
         "type": "service_account",
