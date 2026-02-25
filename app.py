@@ -5,18 +5,26 @@ from poster_engine import create_poster, get_album_from_track
 from weather_utils import draw_weather_dashboard
 from firebase_admin import db
 
-# 1. SETUP
+# 1. SETUP & INIT
 db_url = init_firebase()
 CID = get_secret("SPOTIPY_CLIENT_ID")
 SEC = get_secret("SPOTIPY_CLIENT_SECRET")
 
 st.set_page_config(page_title="Jukebox Funk TV", layout="wide")
-st.markdown("<style>[data-testid='stToolbar'], footer {display: none !important;}</style>", unsafe_allow_html=True)
 
-# 2. ROUTING
+# Hide Streamlit UI elements
+st.markdown("""
+    <style>
+    [data-testid='stToolbar'], footer {display: none !important;}
+    [data-testid="stHeader"] {background: transparent !important;}
+    </style>
+""", unsafe_allow_html=True)
+
+# 2. ROUTING DATA
 v_id = st.query_params.get("venue_id")
 d_id = st.query_params.get("display_id")
 
+# 3. APP LOGIC
 if not v_id:
     # --- ONBOARDING ROOM ---
     if 'pair_code' not in st.session_state:
@@ -25,6 +33,7 @@ if not v_id:
         db.reference(f"pairing_codes/{st.session_state.pair_code}").set({
             "status": "waiting", "display_id": st.session_state.temp_id, "timestamp": time.time()
         })
+    
     st.markdown(f"<h1 style='text-align:center; font-size:10rem; margin-top:20vh;'>{st.session_state.pair_code}</h1>", unsafe_allow_html=True)
     
     res = db.reference(f"pairing_codes/{st.session_state.pair_code}").get()
@@ -37,12 +46,13 @@ if not v_id:
     st.rerun()
 
 else:
-    # --- MAIN TV UI ---
+    # --- PAIRED STATE ---
     if 'current_poster' not in st.session_state: st.session_state.current_poster = None
     if 'last_track' not in st.session_state: st.session_state.last_track = None
     if 'is_standby' not in st.session_state: st.session_state.is_standby = False
     if 'last_heard_time' not in st.session_state: st.session_state.last_heard_time = time.time()
 
+    # --- SIDEBAR UI (Must stay outside the Fragment) ---
     st.sidebar.markdown("## ⚙️ TV Settings")
     orient = st.sidebar.radio("Layout", ["Portrait", "Landscape"], index=1)
     weather_city = st.sidebar.text_input("Weather City", "London")
@@ -63,4 +73,46 @@ else:
             st.session_state.is_standby = False
             log_manual_history(v_id, m_alb, m_art)
 
-    st.sidebar
+    st.sidebar.markdown("---")
+    if st.sidebar.button("Unpair Display", type="secondary"):
+        db.reference(f"venues/{v_id}/displays/{d_id}").delete()
+        st.query_params.clear()
+        st.rerun()
+
+    # --- BACKGROUND SYNC (The Fragment) ---
+    @st.fragment(run_every=3)
+    def sync_listener():
+        # Check for remote unpairing
+        check = db.reference(f"venues/{v_id}/displays/{d_id}").get()
+        if check is None:
+            st.query_params.clear()
+            st.rerun()
+            
+        if live_mode:
+            t, a = get_current_song(v_id)
+            if t:
+                st.session_state.last_heard_time = time.time()
+                if t != st.session_state.last_track:
+                    st.session_state.last_track = t
+                    st.session_state.is_standby = False
+                    alb = get_album_from_track(t, a, CID, SEC) or t
+                    img = create_poster(alb, a, orient, CID, SEC)
+                    if img:
+                        st.session_state.current_poster = img
+                        st.rerun()
+            
+            # Standby logic
+            if (time.time() - st.session_state.last_heard_time) > (idle_mins * 60):
+                if not st.session_state.is_standby:
+                    st.session_state.is_standby = True
+                    st.rerun()
+
+    sync_listener()
+
+    # --- MAIN STAGE RENDERING ---
+    if st.session_state.is_standby:
+        draw_weather_dashboard(weather_city)
+    elif st.session_state.current_poster:
+        st.image(st.session_state.current_poster, use_container_width=True)
+    else:
+        st.markdown("<h3 style='color:gray;text-align:center;margin-top:20vh;'>Waiting for music...</h3>", unsafe_allow_html=True)
