@@ -33,7 +33,9 @@ def init_firebase():
             cert_dict = dict(service_account_info)
         
         if "private_key" in cert_dict:
-            cert_dict["private_key"] = cert_dict["private_key"].replace("\\n", "\n")
+            # Only replace if it's the raw escaped string from JSON
+            if "\\n" in cert_dict["private_key"]:
+                cert_dict["private_key"] = cert_dict["private_key"].replace("\\n", "\n")
             
         cred = credentials.Certificate(cert_dict)
         firebase_admin.initialize_app(cred, {'databaseURL': db_url})
