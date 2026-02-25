@@ -3,7 +3,6 @@ import time, random, string
 import sys
 import os
 
-# Ensure local modules are discoverable
 sys.path.append(os.path.dirname(__file__))
 
 from cloud_utils import init_firebase, get_current_song, get_secret, log_manual_history
@@ -11,10 +10,8 @@ from poster_engine import create_poster, get_album_from_track
 from weather_utils import draw_weather_dashboard
 from firebase_admin import db
 
-# 1. SETUP & INIT
 st.set_page_config(page_title="Jukebox Funk TV", layout="wide")
 
-# Hide Streamlit UI elements
 st.markdown("""
     <style>
     [data-testid='stToolbar'], footer {display: none !important;}
@@ -22,7 +19,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Initialize Firebase
 if not init_firebase():
     st.warning("📡 Awaiting Firebase connection... Check your Secrets.")
     st.stop()
@@ -30,11 +26,9 @@ if not init_firebase():
 CID = get_secret("SPOTIPY_CLIENT_ID")
 SEC = get_secret("SPOTIPY_CLIENT_SECRET")
 
-# 2. ROUTING DATA
 v_id = st.query_params.get("venue_id")
 d_id = st.query_params.get("display_id")
 
-# 3. APP LOGIC
 if not v_id:
     if 'pair_code' not in st.session_state:
         st.session_state.pair_code = ''.join(random.choices(string.digits, k=6))
@@ -60,7 +54,6 @@ else:
     if 'is_standby' not in st.session_state: st.session_state.is_standby = False
     if 'last_heard_time' not in st.session_state: st.session_state.last_heard_time = time.time()
 
-    # SIDEBAR
     st.sidebar.markdown("## ⚙️ TV Settings")
     orient = st.sidebar.radio("Layout", ["Portrait", "Landscape"], index=1)
     weather_city = st.sidebar.text_input("Weather City", "London")
