@@ -9,6 +9,7 @@ import re
 import time
 import random
 import string
+from weather_utils import draw_weather_dashboard
 
 # --- 1. CONFIG & CREDENTIALS ---
 SPOTIPY_CLIENT_ID = '02c1d6fcc3a149138d815e4036c0c36e'
@@ -55,95 +56,7 @@ if 'current_poster' not in st.session_state: st.session_state.current_poster = N
 if 'last_heard_time' not in st.session_state: st.session_state.last_heard_time = time.time()
 if 'is_standby' not in st.session_state: st.session_state.is_standby = False
 
-# --- HELPERS (Cloud, Weather, Text) ---
-def get_current_song_from_cloud(venue_id):
-    url = f"{FIREBASE_BASE}/venues/{venue_id}/now_playing.json"
-    try:
-        response = requests.get(url, timeout=5)
-        if response.status_code == 200:
-            data = response.json()
-            if data and 'track' in data and 'artist' in data:
-                return data['track'], data['artist']
-    except Exception: pass 
-    return None, None
 
-def get_weather(city_name):
-    try:
-        geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={city_name}&count=1&format=json"
-        geo_data = requests.get(geo_url).json()
-        if not geo_data.get('results'): return None
-        lat, lon, resolved_name = geo_data['results'][0]['latitude'], geo_data['results'][0]['longitude'], geo_data['results'][0]['name']
-        weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,weather_code&timezone=auto"
-        weather_data = requests.get(weather_url).json()
-        temp, code = weather_data['current']['temperature_2m'], weather_data['current']['weather_code']
-        emoji, condition = "☀️", "Clear"
-        if code in [1, 2, 3]: emoji, condition = "⛅️", "Partly Cloudy"
-        elif code in [45, 48]: emoji, condition = "🌫️", "Fog"
-        elif code in [51, 53, 55, 56, 57]: emoji, condition = "🌧️", "Drizzle"
-        elif code in [61, 63, 65, 66, 67]: emoji, condition = "🌧️", "Rain"
-        elif code in [71, 73, 75, 77]: emoji, condition = "❄️", "Snow"
-        elif code in [80, 81, 82]: emoji, condition = "🌦️", "Showers"
-        elif code in [95, 96, 99]: emoji, condition = "⛈️", "Thunderstorm"
-        return {"temp": temp, "emoji": emoji, "condition": condition, "name": resolved_name}
-    except Exception: return None
-
-def draw_weather_dashboard(city):
-    weather = get_weather(city)
-    current_time = datetime.now().strftime("%H:%M")
-    current_date = datetime.now().strftime("%A, %B %d")
-    html = f"<div style='text-align: center; padding: 150px 20px; font-family: \"Helvetica Neue\", Helvetica, Arial, sans-serif; color: white; background: #000000; height: 100vh;'>"
-    html += f"<h1 style='font-size: 10rem; margin: 0; font-weight: 200; letter-spacing: -5px;'>{current_time}</h1>"
-    html += f"<p style='font-size: 2rem; margin: 0 0 60px 0; font-weight: 300; opacity: 0.6;'>{current_date}</p>"
-    if weather:
-        html += f"<div style='display: inline-block; background: rgba(255,255,255,0.05); padding: 40px 60px; border-radius: 30px;'>"
-        html += f"<h2 style='font-size: 6rem; margin: 0;'>{weather['emoji']} {weather['temp']}°C</h2>"
-        html += f"<p style='font-size: 1.8rem; margin: 15px 0 0 0; font-weight: 300; opacity: 0.8;'>{weather['condition']} in {weather['name']}</p></div>"
-    html += "</div>"
-    st.markdown(html, unsafe_allow_html=True)
-
-def clean_album_title(title):
-    keywords = [" (deluxe", " [deluxe", " - deluxe", " (remaster", " [remaster", " - remaster", " (expanded", " [expanded", " - expanded", " (original", " [original", " - original"]
-    lower_title = title.lower()
-    for kw in keywords:
-        if kw in lower_title:
-            title = title[:lower_title.index(kw)]
-            lower_title = title.lower() 
-    return title.strip() if title.strip() else title
-
-def clean_track_title(title):
-    return re.sub(r'[\(\[].*?[\)\]]', '', title).split('-')[0].strip()
-
-def draw_wrapped_text(draw, text, font, max_width, x_anchor, start_y, fill, align="right"):
-    if not text or not text.strip(): return start_y
-    lines, words = [], text.split()
-    if not words: return start_y
-    current_line = words[0]
-    for word in words[1:]:
-        if font.getlength(current_line + " " + word) <= max_width: current_line += " " + word
-        else: lines.append(current_line); current_line = word
-    lines.append(current_line)
-    
-    current_y, line_height = start_y, font.getbbox("A")[3] + 10 
-    for line in lines:
-        if align == "right":
-            draw.text((x_anchor - font.getlength(line), current_y), line, font=font, fill=fill)
-        else:
-            draw.text((x_anchor, current_y), line, font=font, fill=fill)
-        current_y += line_height
-    return current_y
-
-def truncate_text(text, font, max_width):
-    if font.getlength(text) <= max_width: return text
-    while font.getlength(text + "...") > max_width and len(text) > 0: text = text[:-1]
-    return text.strip() + "..."
-
-def get_album_from_track(track_name, artist_name):
-    sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(client_id=SPOTIPY_CLIENT_ID, client_secret=SPOTIPY_CLIENT_SECRET))
-    results = sp.search(q=f"track:{track_name} artist:{artist_name}", type='track', limit=1)
-    if results['tracks']['items']: return results['tracks']['items'][0]['album']['name']
-    fallback = sp.search(q=f"{track_name} {artist_name}", type='track', limit=1)
-    if fallback['tracks']['items']: return fallback['tracks']['items'][0]['album']['name']
-    return None
 
 # --- POSTER GENERATOR ---
 def create_poster(album_name, artist_name, orientation="Portrait"):
