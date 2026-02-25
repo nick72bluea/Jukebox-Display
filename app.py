@@ -1,635 +1,474 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator, SafeAreaView, Platform, Modal, ScrollView, Alert, TextInput, Switch, Linking } from 'react-native';
-import { useState, useEffect, useRef } from 'react';
-import { Audio } from 'expo-av';
-import Slider from '@react-native-community/slider'; 
-import AsyncStorage from '@react-native-async-storage/async-storage'; 
+import streamlit as st
+import spotipy
+from spotipy.oauth2 import SpotifyClientCredentials
+import requests
+from io import BytesIO
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
+from datetime import datetime
+import re
+import time
+import random
+import string
 
-import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, set, get, update, remove, onValue } from 'firebase/database';
+# --- 1. CONFIG & CREDENTIALS ---
+SPOTIPY_CLIENT_ID = '02c1d6fcc3a149138d815e4036c0c36e'
+SPOTIPY_CLIENT_SECRET = '7e96739194134d83ba322af5cefd9af4'
+FIREBASE_BASE = "https://posterjukebox-default-rtdb.europe-west1.firebasedatabase.app"
 
-const firebaseConfig = {
-  apiKey: "AIzaSyCP8Yha-0uzhjUq4Z4KTey9OgfyVLiOvmo",
-  authDomain: "posterjukebox.firebaseapp.com",
-  databaseURL: "https://posterjukebox-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "posterjukebox",
-  storageBucket: "posterjukebox.firebasestorage.app",
-  messagingSenderId: "1046555363868",
-  appId: "1:1046555363868:web:c3227214c3987e216f2dd9",
-  measurementId: "G-HLJ97DRX8T"
-};
+# --- PAGE SETUP & KIOSK MODE CSS ---
+st.set_page_config(
+    page_title="Poster Jukebox", 
+    page_icon="🎵", 
+    layout="wide",
+    initial_sidebar_state="collapsed" 
+)
 
-const app = initializeApp(firebaseConfig);
-const database = getDatabase(app);
+hide_st_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            header[data-testid="stHeader"] { background: rgba(0,0,0,0) !important; }
+            .stApp { background-color: #000000; }
+            [data-testid="stImage"] { display: flex; justify-content: center; align-items: center; }
+            </style>
+            """
+st.markdown(hide_st_style, unsafe_allow_html=True)
 
-export default function App() {
-  const [currentStatus, setCurrentStatus] = useState("Waiting for the drop... 🪩");
-  const [isRecording, setIsRecording] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  
-  const [lastTrack, setLastTrack] = useState(null);
-  const [lastArtist, setLastArtist] = useState(null);
-  
-  // NEW: Refs to prevent duplicate logging
-  const lastTrackRef = useRef(null);
-  const lastArtistRef = useRef(null);
-  
-  const [history, setHistory] = useState([]);
-  const [showHistory, setShowHistory] = useState(false);
-  const [vaultTab, setVaultTab] = useState('auto'); 
-  
-  const [venueId, setVenueId] = useState(null);
-  const [showPairing, setShowPairing] = useState(false);
-  const [pairingCode, setPairingCode] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  
-  const [showManage, setShowManage] = useState(false);
-  const [activeDisplays, setActiveDisplays] = useState([]);
+# --- CLOUD PERSISTENCE HELPERS (URL PARAMETERS) ---
+def get_saved_venue():
+    return st.query_params.get("venue_id", None)
 
-  const [showManual, setShowManual] = useState(false);
-  const [manualArtist, setManualArtist] = useState("");
-  const [manualAlbum, setManualAlbum] = useState("");
+def get_saved_display():
+    return st.query_params.get("display_id", None)
 
-  const [sensitivity, setSensitivity] = useState(-35);
-  const sensitivityRef = useRef(-35); 
-  const [isContinuous, setIsContinuous] = useState(false);
-  const continuousRef = useRef(false); 
-  const maxVolumeRef = useRef(-100); 
+def save_connection(vid, did):
+    st.query_params["venue_id"] = vid
+    st.query_params["display_id"] = did
 
-  useEffect(() => {
-    (async () => {
-      await Audio.requestPermissionsAsync();
-      try {
-        let savedVenueId = await AsyncStorage.getItem('@jukebox_venue_id');
-        if (!savedVenueId) {
-          savedVenueId = 'venue_' + Math.random().toString(36).substr(2, 9);
-          await AsyncStorage.setItem('@jukebox_venue_id', savedVenueId);
-        }
-        setVenueId(savedVenueId);
-      } catch (e) {
-        console.error("Failed to load local data", e);
-      }
-    })();
-  }, []);
+def clear_connection():
+    if "venue_id" in st.query_params: del st.query_params["venue_id"]
+    if "display_id" in st.query_params: del st.query_params["display_id"]
 
-  useEffect(() => {
-    if (!venueId) return;
-    const historyRef = ref(database, `venues/${venueId}/history`);
-    const unsubscribe = onValue(historyRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.val();
-        const parsed = Object.keys(data).map(key => data[key]).sort((a, b) => b.id - a.id);
-        setHistory(parsed.slice(0, 100)); 
-      } else {
-        setHistory([]);
-      }
-    });
+# --- INIT SESSION STATE ---
+if 'last_track' not in st.session_state: st.session_state.last_track = None
+if 'current_poster' not in st.session_state: st.session_state.current_poster = None
+if 'last_heard_time' not in st.session_state: st.session_state.last_heard_time = time.time()
+if 'is_standby' not in st.session_state: st.session_state.is_standby = False
 
-    return () => unsubscribe();
-  }, [venueId]);
+# --- HELPERS (Cloud, Weather, Text) ---
+def get_current_song_from_cloud(venue_id):
+    url = f"{FIREBASE_BASE}/venues/{venue_id}/now_playing.json"
+    try:
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            if data and 'track' in data and 'artist' in data:
+                return data['track'], data['artist']
+    except Exception: pass 
+    return None, None
 
-  const handleSliderChange = (val) => {
-    setSensitivity(val);
-    sensitivityRef.current = val;
-  };
+def get_weather(city_name):
+    try:
+        geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={city_name}&count=1&format=json"
+        geo_data = requests.get(geo_url).json()
+        if not geo_data.get('results'): return None
+        lat, lon, resolved_name = geo_data['results'][0]['latitude'], geo_data['results'][0]['longitude'], geo_data['results'][0]['name']
+        weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,weather_code&timezone=auto"
+        weather_data = requests.get(weather_url).json()
+        temp, code = weather_data['current']['temperature_2m'], weather_data['current']['weather_code']
+        emoji, condition = "☀️", "Clear"
+        if code in [1, 2, 3]: emoji, condition = "⛅️", "Partly Cloudy"
+        elif code in [45, 48]: emoji, condition = "🌫️", "Fog"
+        elif code in [51, 53, 55, 56, 57]: emoji, condition = "🌧️", "Drizzle"
+        elif code in [61, 63, 65, 66, 67]: emoji, condition = "🌧️", "Rain"
+        elif code in [71, 73, 75, 77]: emoji, condition = "❄️", "Snow"
+        elif code in [80, 81, 82]: emoji, condition = "🌦️", "Showers"
+        elif code in [95, 96, 99]: emoji, condition = "⛈️", "Thunderstorm"
+        return {"temp": temp, "emoji": emoji, "condition": condition, "name": resolved_name}
+    except Exception: return None
 
-  async function startListening() {
-    try {
-      setCurrentStatus(continuousRef.current ? "Auto-Listening Active 🔁" : "Catching the beat... 🎧");
-      setIsRecording(true);
-      maxVolumeRef.current = -100; 
+def draw_weather_dashboard(city):
+    weather = get_weather(city)
+    current_time = datetime.now().strftime("%H:%M")
+    current_date = datetime.now().strftime("%A, %B %d")
+    html = f"<div style='text-align: center; padding: 150px 20px; font-family: \"Helvetica Neue\", Helvetica, Arial, sans-serif; color: white; background: #000000; height: 100vh;'>"
+    html += f"<h1 style='font-size: 10rem; margin: 0; font-weight: 200; letter-spacing: -5px;'>{current_time}</h1>"
+    html += f"<p style='font-size: 2rem; margin: 0 0 60px 0; font-weight: 300; opacity: 0.6;'>{current_date}</p>"
+    if weather:
+        html += f"<div style='display: inline-block; background: rgba(255,255,255,0.05); padding: 40px 60px; border-radius: 30px;'>"
+        html += f"<h2 style='font-size: 6rem; margin: 0;'>{weather['emoji']} {weather['temp']}°C</h2>"
+        html += f"<p style='font-size: 1.8rem; margin: 15px 0 0 0; font-weight: 300; opacity: 0.8;'>{weather['condition']} in {weather['name']}</p></div>"
+    html += "</div>"
+    st.markdown(html, unsafe_allow_html=True)
 
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const { recording: newRecording } = await Audio.Recording.createAsync({ ...Audio.RecordingOptionsPresets.HIGH_QUALITY, isMeteringEnabled: true });
+def clean_album_title(title):
+    keywords = [" (deluxe", " [deluxe", " - deluxe", " (remaster", " [remaster", " - remaster", " (expanded", " [expanded", " - expanded", " (original", " [original", " - original"]
+    lower_title = title.lower()
+    for kw in keywords:
+        if kw in lower_title:
+            title = title[:lower_title.index(kw)]
+            lower_title = title.lower() 
+    return title.strip() if title.strip() else title
 
-      newRecording.setOnRecordingStatusUpdate((status) => {
-        if (status.isRecording && status.metering !== undefined) {
-          if (status.metering > maxVolumeRef.current) maxVolumeRef.current = status.metering;
-        }
-      });
+def clean_track_title(title):
+    return re.sub(r'[\(\[].*?[\)\]]', '', title).split('-')[0].strip()
 
-      setTimeout(() => stopAndIdentify(newRecording), 6000);
-    } catch (err) {
-      setCurrentStatus("Microphone Error ⚠️");
-      setIsRecording(false);
-      setIsContinuous(false);
-      continuousRef.current = false;
-      setTimeout(() => { if (!continuousRef.current) setCurrentStatus("Waiting for the drop... 🪩"); }, 3000);
-    }
-  }
-
-  async function stopAndIdentify(currentRecording) {
-    setIsRecording(false);
-    setIsProcessing(true);
+def draw_wrapped_text(draw, text, font, max_width, x_anchor, start_y, fill, align="right"):
+    if not text or not text.strip(): return start_y
+    lines, words = [], text.split()
+    if not words: return start_y
+    current_line = words[0]
+    for word in words[1:]:
+        if font.getlength(current_line + " " + word) <= max_width: current_line += " " + word
+        else: lines.append(current_line); current_line = word
+    lines.append(current_line)
     
-    try {
-      await currentRecording.stopAndUnloadAsync();
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
-    } catch (e) {}
+    current_y, line_height = start_y, font.getbbox("A")[3] + 10 
+    for line in lines:
+        if align == "right":
+            draw.text((x_anchor - font.getlength(line), current_y), line, font=font, fill=fill)
+        else:
+            draw.text((x_anchor, current_y), line, font=font, fill=fill)
+        current_y += line_height
+    return current_y
+
+def truncate_text(text, font, max_width):
+    if font.getlength(text) <= max_width: return text
+    while font.getlength(text + "...") > max_width and len(text) > 0: text = text[:-1]
+    return text.strip() + "..."
+
+def get_album_from_track(track_name, artist_name):
+    sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(client_id=SPOTIPY_CLIENT_ID, client_secret=SPOTIPY_CLIENT_SECRET))
+    results = sp.search(q=f"track:{track_name} artist:{artist_name}", type='track', limit=1)
+    if results['tracks']['items']: return results['tracks']['items'][0]['album']['name']
+    fallback = sp.search(q=f"{track_name} {artist_name}", type='track', limit=1)
+    if fallback['tracks']['items']: return fallback['tracks']['items'][0]['album']['name']
+    return None
+
+# --- POSTER GENERATOR ---
+def create_poster(album_name, artist_name, orientation="Portrait"):
+    sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(client_id=SPOTIPY_CLIENT_ID, client_secret=SPOTIPY_CLIENT_SECRET))
+    results = sp.search(q=f"album:{album_name} artist:{artist_name}", type='album', limit=1)
+    if not results['albums']['items']: 
+        results = sp.search(q=f"{album_name}", type='album', limit=1)
+    if not results['albums']['items']: return None
     
-    if (maxVolumeRef.current < sensitivityRef.current) {
-      setIsProcessing(false);
-      triggerNextLoop("No vibes detected. Resting the mic (45s)... 🤫", "No vibes detected. 🤫");
-      return; 
-    }
+    album = results['albums']['items'][0]
+    album_details = sp.album(album['id'])
+    clean_name = clean_album_title(album['name'])
+    cover_url, uri = album['images'][0]['url'], album['uri'] 
 
-    setCurrentStatus("Audio Captured. Asking the Cloud... ☁️");
+    try: release_date = datetime.strptime(album_details['release_date'], '%Y-%m-%d').strftime('%b %d, %Y').upper()
+    except ValueError: release_date = album_details['release_date']
+    
+    clean_tracks = []
+    for track in album_details['tracks']['items']:
+        name = clean_track_title(track['name'].upper())
+        if name and name not in clean_tracks: clean_tracks.append(name)
+    
+    display_tracks = clean_tracks[:22]
+    total_ms = sum(track['duration_ms'] for track in album_details['tracks']['items'])
+    duration_str = f"{total_ms // 60000}:{(total_ms % 60000) // 1000:02d}"
 
-    let uri = currentRecording.getURI();
-    if (!uri.startsWith('file://')) uri = `file://${uri}`;
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    cover_img = Image.open(BytesIO(requests.get(cover_url, headers=headers).content)).convert("RGBA")
+    
+    code_response = requests.get(f"https://scannables.scdn.co/uri/plain/png/000000/white/640/{uri}")
+    if code_response.status_code == 200:
+        spotify_code_img = Image.open(BytesIO(code_response.content)).convert("RGBA")
+        spotify_code_img.putdata([(255, 255, 255, int(sum(item[:3]) / 3)) for item in spotify_code_img.getdata()])
+    else: spotify_code_img = Image.new('RGBA', (640, 160), (255, 255, 255, 0))
 
-    let formData = new FormData();
-    formData.append('file', { uri: uri, type: 'audio/m4a', name: 'recording.m4a' });
-    formData.append('api_token', '658e3bc1767e7ed2d511e0684e0068bb');
+    def get_safe_font(size):
+        font_paths = ["/System/Library/Fonts/Supplemental/Arial Narrow Bold.ttf", "/System/Library/Fonts/Supplemental/Arial Bold.ttf", "/Library/Fonts/Arial Bold.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"]
+        for path in font_paths:
+            try: return ImageFont.truetype(path, size)
+            except IOError: continue
+        return ImageFont.load_default()
 
-    try {
-      const response = await fetch('https://api.audd.io/', { method: 'POST', body: formData, headers: { 'Content-Type': 'multipart/form-data' } });
-      const result = await response.json();
-
-      if (result.status === "success" && result.result) {
-        const track = result.result.title;
-        const artist = result.result.artist;
+    if orientation == "Portrait":
+        poster_w, poster_h, padding = 1200, 1800, 70
+        cover_size = poster_w - (padding * 2)
         
-        // NEW: Duplicate Check
-        if (lastTrackRef.current === track && lastArtistRef.current === artist) {
-            setCurrentStatus("Still Grooving... 🎧");
-            setIsProcessing(false);
-            triggerNextLoop("Track locked in. Cooling the decks (45s)... 🎛️");
-            return;
-        }
-
-        // Update Refs & State
-        lastTrackRef.current = track;
-        lastArtistRef.current = artist;
-        setLastTrack(track); 
-        setLastArtist(artist); 
-        setCurrentStatus("Banger Found! 🔥");
+        bg_img = cover_img.resize((poster_w, poster_h)).filter(ImageFilter.GaussianBlur(radius=40))
+        poster = Image.alpha_composite(bg_img, Image.new('RGBA', bg_img.size, (0, 0, 0, 130)))
+        draw = ImageDraw.Draw(poster)
         
-        // NEW: Date formatting
-        const now = new Date();
-        const timeStr = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        const dateStr = now.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' });
+        draw.rectangle([padding-3, padding-3, padding+cover_size+2, padding+cover_size+2], fill="black")
+        poster.paste(cover_img.resize((cover_size, cover_size)), (padding, padding))
         
-        const newItem = { track, artist, time: timeStr, date: dateStr, id: Date.now().toString(), type: 'auto' };
-        set(ref(database, `venues/${venueId}/history/${newItem.id}`), newItem);
+        code_y = padding + cover_size + 45      
+        code_w = int((90 / spotify_code_img.height) * spotify_code_img.width)
+        poster.paste(spotify_code_img.resize((code_w, 90)), (padding, code_y), spotify_code_img.resize((code_w, 90)))
+
+        title_size = 34 if len(clean_name) > 30 else (38 if len(clean_name) > 20 else 42)
+        artist_size = 45 if len(artist_name) > 35 else (60 if len(artist_name) > 25 else 75)
         
-        sendToCloud(track, artist);
-      } else {
-        setCurrentStatus("Couldn't catch that tune. 🤷");
-      }
-    } catch (error) {
-      setCurrentStatus("Network Error 🌐");
-    }
-    
-    setIsProcessing(false);
-    triggerNextLoop("Track locked in. Cooling the decks (45s)... 🎛️");
-  }
+        max_text_width = (poster_w - padding) - (padding + code_w + 20)
+        new_y_after_artist = draw_wrapped_text(draw, artist_name.upper(), get_safe_font(artist_size), max_text_width, poster_w - padding, code_y - 12, "white", "right")
+        new_y_after_title = draw_wrapped_text(draw, clean_name.upper(), get_safe_font(title_size), max_text_width, poster_w - padding, new_y_after_artist + 5, "white", "right")
 
-  const triggerNextLoop = (continuousMessage, manualMessage = null) => {
-    if (continuousRef.current) {
-      setCurrentStatus(continuousMessage);
-      setTimeout(() => { if (continuousRef.current) startListening(); }, 45000); 
-    } else {
-      if (manualMessage) setCurrentStatus(manualMessage);
-      setTimeout(() => { if (!continuousRef.current) setCurrentStatus("Waiting for the drop... 🪩"); }, 3500);
-    }
-  }
-
-  const sendToCloud = (songName, artistName) => {
-    if (!venueId) return;
-    const dbRef = ref(database, `venues/${venueId}/now_playing`);
-    set(dbRef, { track: songName, artist: artistName, timestamp: Date.now() });
-  };
-
-  const handleManualPush = () => {
-    if (!manualArtist.trim() || !manualAlbum.trim()) {
-      Alert.alert("Missing Info", "Please enter both an Artist and an Album name.");
-      return;
-    }
-    const safeAlbum = manualAlbum.trim();
-    const safeArtist = manualArtist.trim();
-
-    // Update refs so the auto-scanner doesn't immediately log this if it hears it
-    lastTrackRef.current = safeAlbum;
-    lastArtistRef.current = safeArtist;
-
-    sendToCloud(safeAlbum, safeArtist);
-    
-    setLastTrack(safeAlbum);
-    setLastArtist(safeArtist);
-    setCurrentStatus("Manual Override Sent 🚀");
-    
-    // NEW: Date formatting
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-    const dateStr = now.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' });
-
-    const newItem = { track: safeAlbum, artist: safeArtist, time: timeStr, date: dateStr, id: Date.now().toString(), type: 'manual' };
-    set(ref(database, `venues/${venueId}/history/${newItem.id}`), newItem);
-
-    setShowManual(false);
-    setManualArtist("");
-    setManualAlbum("");
-    
-    setTimeout(() => { if (!continuousRef.current) setCurrentStatus("Waiting for the drop... 🪩"); }, 3500);
-  };
-
-  const handlePairDisplay = async () => {
-    const cleanCode = pairingCode.replace(/\s+/g, '').trim();
-    if (cleanCode.length !== 6) { Alert.alert("Invalid Code", "Please enter the 6-digit code."); return; }
-
-    try {
-      const codeRef = ref(database, `pairing_codes/${cleanCode}`);
-      const snapshot = await get(codeRef);
-      
-      if (snapshot.exists()) {
-        const data = snapshot.val();
-        if (data.status === 'waiting') {
-          const dispId = data.display_id;
-          const displaysRef = ref(database, `venues/${venueId}/displays`);
-          const dispSnapshot = await get(displaysRef);
-          let currentCount = 0;
-          if (dispSnapshot.exists()) currentCount = Object.keys(dispSnapshot.val()).length;
-
-          if (currentCount >= 10) {
-            Alert.alert("Limit Reached", "You can only link up to 10 displays. Please remove one first.");
-            return;
-          }
-
-          const finalName = displayName.trim() || `Display ${currentCount + 1}`;
-          const newDispRef = ref(database, `venues/${venueId}/displays/${dispId}`);
-          await set(newDispRef, { name: finalName, added: Date.now() });
-
-          await update(codeRef, { status: 'linked', venue_id: venueId });
-          
-          Alert.alert("Success! 📺", `${finalName} linked to your Jukebox.`);
-          setPairingCode(""); setDisplayName(""); setShowPairing(false);
-        } else {
-          Alert.alert("Error", "This code has already been linked.");
-        }
-      } else {
-        Alert.alert("Not Found", "Code not found. Make sure the TV is waiting.");
-      }
-    } catch (err) {
-      Alert.alert("Network Error", "Could not reach the servers.");
-    }
-  };
-
-  const fetchDisplays = async () => {
-    if (!venueId) return;
-    const displaysRef = ref(database, `venues/${venueId}/displays`);
-    const snapshot = await get(displaysRef);
-    if (snapshot.exists()) {
-      const data = snapshot.val();
-      const parsed = Object.keys(data).map(key => ({ id: key, ...data[key] }));
-      setActiveDisplays(parsed);
-    } else {
-      setActiveDisplays([]);
-    }
-  };
-
-  const removeDisplay = async (dispId, dispName) => {
-    Alert.alert("Unlink Display", `Are you sure you want to remove ${dispName}?`, [
-      { text: "Cancel", style: "cancel" },
-      { text: "Remove", style: "destructive", onPress: async () => {
-        const dispRef = ref(database, `venues/${venueId}/displays/${dispId}`);
-        await remove(dispRef);
-        fetchDisplays(); 
-      }}
-    ]);
-  };
-
-  const handleContinuousSwitch = (value) => {
-    setIsContinuous(value);
-    continuousRef.current = value;
-    if (value) startListening();
-    else setCurrentStatus("Waiting for the drop... 🪩");
-  };
-
-  const manualListen = () => { if (!continuousRef.current) startListening(); };
-
-  const clearHistory = () => {
-    Alert.alert("Clear Vault", `Wipe your ${vaultTab === 'auto' ? 'Automated' : 'Manual'} log?`, [
-      { text: "Cancel", style: "cancel" },
-      { text: "Wipe It", style: "destructive", onPress: () => { 
-          const itemsToDelete = history.filter(item => (item.type || 'auto') === vaultTab);
-          itemsToDelete.forEach(item => {
-            remove(ref(database, `venues/${venueId}/history/${item.id}`));
-          });
-        } 
-      }
-    ]);
-  };
-
-  const openMusicApp = async (track, artist, platform) => {
-    const query = encodeURIComponent(`${track} ${artist}`);
-    let appUrl = '';
-    let webUrl = '';
-
-    if (platform === 'spotify') {
-      appUrl = `spotify://search/${query}`;
-      webUrl = `https://open.spotify.com/search/$${query}`;
-    } else if (platform === 'apple') {
-      appUrl = `music://music.apple.com/search?term=${query}`;
-      webUrl = `https://music.apple.com/search?term=${query}`;
-    }
-
-    try {
-      const supported = await Linking.canOpenURL(appUrl);
-      if (supported) {
-        await Linking.openURL(appUrl);
-      } else {
-        await Linking.openURL(webUrl); 
-      }
-    } catch (error) {
-      Alert.alert("Error", `Couldn't open ${platform === 'spotify' ? 'Spotify' : 'Apple Music'}`);
-    }
-  };
-
-  let statusBorder = '#333';
-  let statusColor = '#888';
-  if (isRecording) { statusBorder = '#EF4444'; statusColor = '#EF4444'; }
-  else if (isProcessing) { statusBorder = '#10B981'; statusColor = '#10B981'; }
-  else if (isContinuous) { statusBorder = '#7C3AED'; statusColor = '#7C3AED'; }
-
-  const displayedHistory = history.filter(item => (item.type || 'auto') === vaultTab);
-
-  return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar style="light" />
-      <View style={styles.container}>
+        track_y_start = new_y_after_title + 50 
+        meta_y, bar_y = poster_h - padding - 45, poster_h - padding + 5
         
-        <View style={styles.header}>
-          <Text style={styles.logo}>JUKEBOX <Text style={styles.accent}>FUNK</Text></Text>
-          <View style={[styles.indicator, { backgroundColor: venueId ? '#10B981' : '#EF4444' }]} />
-        </View>
+        track_lines = max(1, (len(display_tracks) + 1) // 2)
+        track_spacing = min(48, (meta_y - track_y_start - 20) // track_lines)
+        max_col_width = (poster_w - (padding * 2)) // 2 - 30 
+        font_tracks = get_safe_font(34)
 
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
-          
-          <View style={[styles.statusBox, { borderColor: statusBorder }]}>
-            {(isRecording || isProcessing) && <ActivityIndicator size="small" color={statusColor} style={styles.statusSpinner} />}
-            <Text style={[styles.statusLabel, { color: statusColor }]}>{currentStatus.toUpperCase()}</Text>
-          </View>
-
-          <View style={styles.card}>
-            <View style={styles.row}>
-              <View>
-                <Text style={styles.label}>CONTINUOUS GROOVE</Text>
-                <Text style={styles.subLabel}>AUTO-REFRESH: 45S</Text>
-              </View>
-              <Switch 
-                value={isContinuous} 
-                onValueChange={handleContinuousSwitch}
-                trackColor={{ false: "#333", true: "#7C3AED" }}
-                thumbColor="#FFF"
-              />
-            </View>
-            <View style={styles.divider} />
-            <View style={styles.sliderRow}>
-              <Text style={styles.label}>MIC SENSITIVITY</Text>
-              <Text style={styles.valueText}>{sensitivity} dB</Text>
-            </View>
-            <Slider
-              style={styles.slider} minimumValue={-80} maximumValue={-10} step={1}
-              value={sensitivity} onValueChange={handleSliderChange}
-              minimumTrackTintColor="#7C3AED" maximumTrackTintColor="#333" thumbTintColor="#FFF"
-            />
-          </View>
-
-          <TouchableOpacity 
-            style={[styles.primaryBtn, (isRecording || isProcessing || isContinuous) && styles.disabledBtn]} 
-            onPress={manualListen}
-            disabled={isRecording || isProcessing || isContinuous}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.primaryBtnText}>CATCH THE GROOVE</Text>
-          </TouchableOpacity>
-
-          <View style={styles.buttonGrid}>
-            <TouchableOpacity style={styles.gridBtn} onPress={() => setShowHistory(true)}>
-              <Text style={styles.gridBtnText}>VAULT</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.gridBtn} onPress={() => { fetchDisplays(); setShowManage(true); }}>
-              <Text style={styles.gridBtnText}>SCREENS</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.buttonGrid}>
-            <TouchableOpacity style={styles.gridBtn} onPress={() => setShowManual(true)}>
-              <Text style={styles.gridBtnText}>MANUAL PUSH</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.gridBtn} onPress={() => setShowPairing(true)}>
-              <Text style={styles.gridBtnText}>LINK TV</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.spacer} />
-
-          <View style={styles.footerSpacer}>
-            {lastTrack ? (
-              <View style={styles.foundCard}>
-                <Text style={styles.foundLabel}>LATEST VIBE CAPTURED</Text>
-                <Text style={styles.foundTitle} numberOfLines={1} adjustsFontSizeToFit>{lastTrack}</Text>
-                <Text style={styles.foundArtist} numberOfLines={1}>{lastArtist}</Text>
-              </View>
-            ) : (
-              <View style={styles.foundCardEmpty}>
-                <Text style={styles.idleText}>WAITING FOR THE NEXT HIT...</Text>
-              </View>
-            )}
-          </View>
-
-        </ScrollView>
-      </View>
-
-      {/* --- MODALS --- */}
-      
-      <Modal visible={showHistory} animationType="slide" presentationStyle="pageSheet">
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>The Vault</Text>
-            <TouchableOpacity onPress={() => setShowHistory(false)}><Text style={styles.closeButtonText}>Done</Text></TouchableOpacity>
-          </View>
-          
-          <View style={styles.tabRow}>
-            <TouchableOpacity style={[styles.tabBtn, vaultTab === 'auto' && styles.tabBtnActive]} onPress={() => setVaultTab('auto')}>
-              <Text style={[styles.tabBtnText, vaultTab === 'auto' && styles.tabBtnTextActive]}>AUTOMATED</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.tabBtn, vaultTab === 'manual' && styles.tabBtnActive]} onPress={() => setVaultTab('manual')}>
-              <Text style={[styles.tabBtnText, vaultTab === 'manual' && styles.tabBtnTextActive]}>MANUAL PUSH</Text>
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView style={styles.historyList}>
-            {displayedHistory.length === 0 ? (
-              <Text style={styles.emptyHistoryText}>No {vaultTab === 'auto' ? 'scans' : 'pushes'} found.</Text>
-            ) : (
-              displayedHistory.map((item) => (
-                <View key={item.id} style={styles.historyItem}>
-                  <View style={styles.historyTextStack}>
-                    <Text style={styles.historyTrack} numberOfLines={1}>{item.track}</Text>
-                    <Text style={styles.historyArtist} numberOfLines={1}>{item.artist}</Text>
-                  </View>
-                  
-                  {/* UPDATED: Time and Date Stack */}
-                  <View style={styles.historyMeta}>
-                    <Text style={styles.historyTime}>{item.time}</Text>
-                    <Text style={styles.historyDate}>{item.date || "Today"}</Text>
-                  </View>
-
-                  <View style={styles.musicLinks}>
-                    <TouchableOpacity onPress={() => openMusicApp(item.track, item.artist, 'spotify')} style={styles.musicBtn}>
-                      <Text style={[styles.musicBtnText, {color: '#1DB954'}]}>SPOTIFY</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => openMusicApp(item.track, item.artist, 'apple')} style={[styles.musicBtn, {marginTop: 8}]}>
-                      <Text style={[styles.musicBtnText, {color: '#FA243C'}]}>APPLE</Text>
-                    </TouchableOpacity>
-                  </View>
-
-                </View>
-              ))
-            )}
-          </ScrollView>
-          {displayedHistory.length > 0 && (
-            <TouchableOpacity style={styles.clearHistoryButton} onPress={clearHistory}>
-              <Text style={styles.clearHistoryText}>CLEAR THIS LIST</Text>
-            </TouchableOpacity>
-          )}
-        </SafeAreaView>
-      </Modal>
-
-      <Modal visible={showPairing} animationType="fade" transparent={true}>
-        <View style={styles.overlay}>
-          <View style={styles.pairingCard}>
-            <Text style={styles.modalTitle}>Link Display</Text>
-            <Text style={styles.pairingSub}>Enter the 6-digit code shown on your TV.</Text>
-            <TextInput style={styles.pairingInput} value={pairingCode} onChangeText={setPairingCode} placeholder="123456" placeholderTextColor="#444" keyboardType="number-pad" maxLength={6} />
-            <Text style={styles.pairingSub}>Name this screen (Optional)</Text>
-            <TextInput style={styles.nameInput} value={displayName} onChangeText={setDisplayName} placeholder="e.g., Living Room" placeholderTextColor="#444" />
-            <TouchableOpacity style={styles.pairActionButton} onPress={handlePairDisplay}><Text style={styles.pairActionText}>LINK SCREEN</Text></TouchableOpacity>
-            <TouchableOpacity style={styles.pairCancelButton} onPress={() => { setShowPairing(false); setPairingCode(""); setDisplayName(""); }}><Text style={styles.pairCancelText}>CANCEL</Text></TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal visible={showManual} animationType="fade" transparent={true}>
-        <View style={styles.overlay}>
-          <View style={styles.pairingCard}>
-            <Text style={styles.modalTitle}>Manual Override</Text>
-            <Text style={styles.pairingSub}>Push a specific artist and album directly to your screens.</Text>
+        mid_point = (len(display_tracks) + 1) // 2
+        for i, track in enumerate(display_tracks[:mid_point]):
+            text = truncate_text(f"{i+1}. {track}", font_tracks, max_col_width)
+            draw.text((padding, track_y_start + (i * track_spacing)), text, font=font_tracks, fill="white")
             
-            <TextInput style={styles.nameInput} value={manualArtist} onChangeText={setManualArtist} placeholder="Artist (e.g., Oasis)" placeholderTextColor="#555" />
-            <TextInput style={[styles.nameInput, { marginBottom: 25 }]} value={manualAlbum} onChangeText={setManualAlbum} placeholder="Album (e.g., Definitely Maybe)" placeholderTextColor="#555" />
+        for i, track in enumerate(display_tracks[mid_point:]):
+            text = truncate_text(f"{track} .{mid_point+i+1}", font_tracks, max_col_width)
+            draw.text((poster_w - padding, track_y_start + (i * track_spacing)), text, font=font_tracks, fill="white", anchor="ra")
 
-            <TouchableOpacity style={styles.pairActionButton} onPress={handleManualPush}>
-              <Text style={styles.pairActionText}>PUSH TO SCREENS</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.pairCancelButton} onPress={() => { setShowManual(false); setManualArtist(""); setManualAlbum(""); }}>
-              <Text style={styles.pairCancelText}>CANCEL</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+        draw.text((padding, meta_y), f"RELEASE DATE: {release_date}", font=get_safe_font(19), fill="#e0e0e0")
+        draw.text((poster_w - padding, meta_y), f"ALBUM DURATION: {duration_str}", font=get_safe_font(19), fill="#e0e0e0", anchor="ra")
 
-      <Modal visible={showManage} animationType="slide" presentationStyle="pageSheet">
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Active Screens</Text>
-            <TouchableOpacity onPress={() => setShowManage(false)}><Text style={styles.closeButtonText}>Done</Text></TouchableOpacity>
-          </View>
-          <ScrollView style={styles.historyList}>
-            <Text style={styles.limitText}>Using {activeDisplays.length} of 10 available slots.</Text>
-            {activeDisplays.length === 0 ? (
-              <Text style={styles.emptyHistoryText}>No screens connected yet.</Text>
-            ) : (
-              activeDisplays.map((disp) => (
-                <View key={disp.id} style={styles.historyItem}>
-                  <View style={styles.historyTextStack}>
-                    <Text style={styles.historyTrack}>{disp.name}</Text>
-                    <Text style={styles.historyTime}>ID: {disp.id.substring(0, 8)}...</Text>
-                  </View>
-                  <TouchableOpacity onPress={() => removeDisplay(disp.id, disp.name)}>
-                    <Text style={styles.removeText}>UNLINK</Text>
-                  </TouchableOpacity>
-                </View>
-              ))
-            )}
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
+        segment_w = cover_size // 4
+        for i in range(4):
+            color = cover_img.crop((i * (cover_img.width // 4), 0, (i + 1) * (cover_img.width // 4), cover_img.height)).resize((1, 1), resample=Image.Resampling.LANCZOS).getpixel((0, 0))
+            draw.rectangle([padding + (i * segment_w), bar_y, padding + ((i + 1) * segment_w), bar_y + 20], fill=color)
 
-    </SafeAreaView>
-  );
-}
+    else:
+        poster_w, poster_h, padding = 1920, 1080, 80
+        cover_size = 800 
+        
+        bg_img = cover_img.resize((poster_w, poster_h)).filter(ImageFilter.GaussianBlur(radius=50))
+        poster = Image.alpha_composite(bg_img, Image.new('RGBA', bg_img.size, (0, 0, 0, 160))) 
+        draw = ImageDraw.Draw(poster)
+        
+        draw.rectangle([padding-3, padding-3, padding+cover_size+2, padding+cover_size+2], fill="black")
+        poster.paste(cover_img.resize((cover_size, cover_size)), (padding, padding))
+        
+        text_start_x = padding + cover_size + 80
+        code_w = int((100 / spotify_code_img.height) * spotify_code_img.width)
+        poster.paste(spotify_code_img.resize((code_w, 100)), (text_start_x, padding), spotify_code_img.resize((code_w, 100)))
 
-// --- PREMIUM STUDIO STYLES ---
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#000' },
-  container: { flex: 1, paddingHorizontal: 25, paddingTop: Platform.OS === 'android' ? 40 : 0 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25, marginTop: 15 },
-  logo: { color: '#FFF', fontSize: 26, fontWeight: '900', letterSpacing: 2 },
-  accent: { color: '#7C3AED' },
-  indicator: { width: 8, height: 8, borderRadius: 4 },
-  statusBox: { borderWidth: 1, borderRadius: 15, padding: 18, alignItems: 'center', marginBottom: 20, flexDirection: 'row', justifyContent: 'center', backgroundColor: '#0A0A0A' },
-  statusSpinner: { marginRight: 10 },
-  statusLabel: { fontWeight: '900', letterSpacing: 2, fontSize: 12 },
-  card: { backgroundColor: '#111', borderRadius: 24, padding: 25, marginBottom: 20, borderWidth: 1, borderColor: '#1A1A1A' },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  divider: { height: 1, backgroundColor: '#222', marginVertical: 20 },
-  label: { color: '#888', fontWeight: 'bold', fontSize: 12, letterSpacing: 1 },
-  subLabel: { color: '#555', fontSize: 10, fontWeight: 'bold', marginTop: 3 },
-  sliderRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 },
-  valueText: { color: '#7C3AED', fontWeight: 'bold', fontSize: 18 },
-  slider: { width: '100%', height: 40 },
-  primaryBtn: { backgroundColor: '#7C3AED', padding: 22, borderRadius: 20, alignItems: 'center', marginBottom: 15 },
-  disabledBtn: { backgroundColor: '#222' },
-  primaryBtnText: { color: '#FFF', fontWeight: '900', fontSize: 15, letterSpacing: 1.5 },
-  buttonGrid: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-  gridBtn: { backgroundColor: '#111', paddingVertical: 18, borderRadius: 16, alignItems: 'center', flex: 1, marginHorizontal: 4, borderWidth: 1, borderColor: '#1A1A1A' },
-  gridBtnText: { color: '#FFF', fontWeight: '800', fontSize: 11, letterSpacing: 1 },
-  spacer: { flex: 1 },
-  footerSpacer: { paddingBottom: Platform.OS === 'android' ? 60 : 30, paddingTop: 10 },
-  foundCard: { backgroundColor: '#111', padding: 25, borderRadius: 20, borderLeftWidth: 4, borderLeftColor: '#7C3AED' },
-  foundCardEmpty: { backgroundColor: '#0A0A0A', padding: 25, borderRadius: 20, borderWidth: 1, borderColor: '#1A1A1A', alignItems: 'center' },
-  foundLabel: { color: '#555', fontSize: 10, fontWeight: 'bold', letterSpacing: 1, marginBottom: 8 },
-  foundTitle: { color: '#FFF', fontSize: 24, fontWeight: '900', marginBottom: 4 },
-  foundArtist: { color: '#A0A0A0', fontSize: 16, fontWeight: '600' },
-  idleText: { color: '#444', fontSize: 12, fontWeight: 'bold', letterSpacing: 1 },
-  modalContainer: { flex: 1, backgroundColor: '#050505' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 25, paddingVertical: 20, borderBottomWidth: 1, borderBottomColor: '#1A1A1A' },
-  modalTitle: { color: '#FFF', fontSize: 22, fontWeight: '900', letterSpacing: 1 },
-  closeButtonText: { color: '#7C3AED', fontSize: 16, fontWeight: '700' },
-  tabRow: { flexDirection: 'row', paddingHorizontal: 25, paddingTop: 20, paddingBottom: 10 },
-  tabBtn: { flex: 1, paddingVertical: 12, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: '#222' },
-  tabBtnActive: { borderBottomColor: '#7C3AED' },
-  tabBtnText: { color: '#555', fontWeight: '800', fontSize: 12, letterSpacing: 1 },
-  tabBtnTextActive: { color: '#7C3AED' },
-  historyList: { flex: 1, paddingHorizontal: 25, paddingTop: 10 },
-  emptyHistoryText: { color: '#444', fontSize: 16, marginTop: 40, textAlign: 'center', fontStyle: 'italic' },
-  historyItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 20, borderBottomWidth: 1, borderBottomColor: '#111' },
-  historyTextStack: { flex: 1, paddingRight: 10 },
-  historyTrack: { color: '#FFF', fontSize: 18, fontWeight: '800', marginBottom: 4 },
-  historyArtist: { color: '#888', fontSize: 14, fontWeight: '600' },
-  
-  // NEW: Meta Data Styling (Date & Time)
-  historyMeta: { alignItems: 'flex-end', marginRight: 15, justifyContent: 'center' },
-  historyTime: { color: '#FFF', fontSize: 13, fontWeight: '800' },
-  historyDate: { color: '#555', fontSize: 11, fontWeight: '700', marginTop: 2 },
-  
-  musicLinks: { flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center' },
-  musicBtn: { backgroundColor: '#1A1A1A', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: '#333' },
-  musicBtnText: { fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+        right_edge_x = poster_w - padding
+        max_title_width = (poster_w - padding) - (text_start_x + code_w + 40)
+        
+        artist_size = 70 if len(artist_name) > 25 else 90
+        title_size = 40 if len(clean_name) > 30 else 50
+        
+        new_y_after_artist = draw_wrapped_text(draw, artist_name.upper(), get_safe_font(artist_size), max_title_width, right_edge_x, padding - 10, "white", "right")
+        new_y_after_title = draw_wrapped_text(draw, clean_name.upper(), get_safe_font(title_size), max_title_width, right_edge_x, new_y_after_artist + 15, "#e0e0e0", "right")
 
-  clearHistoryButton: { padding: 25, alignItems: 'center', borderTopWidth: 1, borderTopColor: '#1A1A1A' },
-  clearHistoryText: { color: '#EF4444', fontSize: 13, fontWeight: '800', letterSpacing: 1 },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', padding: 25 },
-  pairingCard: { backgroundColor: '#111', padding: 30, borderRadius: 24, borderWidth: 1, borderColor: '#222' },
-  pairingSub: { color: '#888', marginTop: 10, marginBottom: 15, fontSize: 13, fontWeight: '600' },
-  pairingInput: { backgroundColor: '#000', color: '#FFF', fontSize: 32, fontWeight: '900', textAlign: 'center', padding: 15, borderRadius: 16, borderWidth: 1, borderColor: '#333', marginBottom: 20, letterSpacing: 5 },
-  nameInput: { backgroundColor: '#000', color: '#FFF', fontSize: 16, padding: 18, borderRadius: 16, borderWidth: 1, borderColor: '#333', marginBottom: 15, fontWeight: '600' },
-  pairActionButton: { backgroundColor: '#7C3AED', padding: 20, borderRadius: 100, alignItems: 'center', marginBottom: 15 },
-  pairActionText: { color: '#FFF', fontWeight: '900', fontSize: 14, letterSpacing: 1 },
-  pairCancelButton: { alignItems: 'center', paddingVertical: 10 },
-  pairCancelText: { color: '#666', fontWeight: '800', letterSpacing: 1 },
-  limitText: { color: '#555', fontSize: 12, textAlign: 'center', marginBottom: 20, marginTop: 10, fontWeight: '700' },
-  removeText: { color: '#EF4444', fontWeight: '900', fontSize: 12, letterSpacing: 1, padding: 10 }
-});
+        track_y_start = new_y_after_title + 70 
+        font_tracks = get_safe_font(34)
+        meta_y = poster_h - padding - 45
+        
+        if len(display_tracks) <= 11:
+            track_spacing = 45
+            max_track_width = right_edge_x - text_start_x
+            for i, track in enumerate(display_tracks):
+                text = truncate_text(f"{track} .{i+1}", font_tracks, max_track_width)
+                draw.text((right_edge_x, track_y_start + (i * track_spacing)), text, font=font_tracks, fill="white", anchor="ra")
+        else:
+            mid_point = (len(display_tracks) + 1) // 2
+            track_spacing = min(45, (meta_y - track_y_start - 20) // mid_point) 
+            max_col_width = (right_edge_x - text_start_x) // 2 - 20
+            
+            for i, track in enumerate(display_tracks[:mid_point]):
+                text = truncate_text(f"{i+1}. {track}", font_tracks, max_col_width)
+                draw.text((text_start_x, track_y_start + (i * track_spacing)), text, font=font_tracks, fill="white")
+                
+            for i, track in enumerate(display_tracks[mid_point:]):
+                text = truncate_text(f"{track} .{mid_point+i+1}", font_tracks, max_col_width)
+                draw.text((right_edge_x, track_y_start + (i * track_spacing)), text, font=font_tracks, fill="white", anchor="ra")
+
+        draw.text((padding, meta_y), f"RELEASE DATE: {release_date}", font=get_safe_font(22), fill="#cccccc")
+        draw.text((poster_w - padding, meta_y), f"ALBUM DURATION: {duration_str}", font=get_safe_font(22), fill="#cccccc", anchor="ra")
+
+        bar_y = poster_h - padding + 5
+        bar_width = poster_w - (padding * 2)
+        segment_w = bar_width // 4
+        
+        for i in range(4):
+            color = cover_img.crop((i * (cover_img.width // 4), 0, (i + 1) * (cover_img.width // 4), cover_img.height)).resize((1, 1), resample=Image.Resampling.LANCZOS).getpixel((0, 0))
+            draw.rectangle([padding + (i * segment_w), bar_y, padding + ((i + 1) * segment_w), bar_y + 20], fill=color)
+
+    return poster
+
+
+# ==========================================
+# --- CORE APP LOGIC (ROUTING) ---
+# ==========================================
+
+current_venue_id = get_saved_venue()
+current_display_id = get_saved_display()
+
+if not current_venue_id or not current_display_id:
+    # --- BUG FIX: BANISH THE SIDEBAR ---
+    st.markdown("""
+        <style>
+        [data-testid="stSidebar"] { display: none !important; }
+        [data-testid="collapsedControl"] { display: none !important; }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # --- ONBOARDING / WAITING ROOM ---
+    if 'pair_code' not in st.session_state:
+        st.session_state.pair_code = ''.join(random.choices(string.digits, k=6))
+        st.session_state.temp_display_id = 'disp_' + ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+        
+        url = f"{FIREBASE_BASE}/pairing_codes/{st.session_state.pair_code}.json"
+        requests.put(url, json={
+            "status": "waiting", 
+            "display_id": st.session_state.temp_display_id,
+            "timestamp": time.time()
+        })
+
+    code = st.session_state.pair_code
+    formatted_code = f"{code[:3]} {code[3:]}"
+    
+    st.markdown(f"<h3 style='text-align: center; color: #7C3AED; margin-top: 15vh; font-family: sans-serif; letter-spacing: 4px;'>LINK YOUR DISPLAY</h3>", unsafe_allow_html=True)
+    st.markdown(f"<h1 style='text-align: center; font-size: 8rem; color: white; margin-top: -20px;'>{formatted_code}</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: gray; font-size: 1.5rem;'>Enter this code in the Jukebox Funk app.</p>", unsafe_allow_html=True)
+    
+    time.sleep(2)
+    url = f"{FIREBASE_BASE}/pairing_codes/{code}.json"
+    try:
+        res = requests.get(url, timeout=5).json()
+        if res and res.get("status") == "linked" and res.get("venue_id"):
+            save_connection(res["venue_id"], st.session_state.temp_display_id)
+            requests.delete(url)
+            st.rerun() 
+    except Exception:
+        pass
+        
+    st.rerun() 
+
+else:
+    # --- PAIRED STATE (MAIN APP) ---
+    
+    if 'live_mode_toggle' not in st.session_state: st.session_state.live_mode_toggle = False
+    if 'prev_live_mode' not in st.session_state: st.session_state.prev_live_mode = False
+
+    st.sidebar.markdown("## ⚙️ TV Settings")
+    display_orientation = st.sidebar.radio("Display Layout", ["Portrait", "Landscape"], index=1, key="display_layout")
+    st.sidebar.markdown("---")
+    weather_city = st.sidebar.text_input("Local City for Weather", value="London")
+    idle_timeout_mins = st.sidebar.slider("Minutes until Standby Screen", min_value=1, max_value=15, value=5)
+
+    if 'last_orientation' not in st.session_state: st.session_state.last_orientation = display_orientation
+
+    st.sidebar.markdown("---")
+    live_mode = st.sidebar.toggle("📺 **CONNECT TO CLOUD REMOTE**", key="live_mode_toggle")
+
+    if live_mode != st.session_state.prev_live_mode:
+        st.session_state.prev_live_mode = live_mode
+        st.rerun() 
+
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### 🎸 Manual Search")
+    st.sidebar.text_input("Artist Name", placeholder="e.g., Oasis", value="Oasis", key="manual_artist")
+    st.sidebar.text_input("Album Name", placeholder="e.g., Definitely Maybe", value="Definitely Maybe", key="manual_album")
+
+    def generate_manual_poster():
+        result_img = create_poster(st.session_state.manual_album, st.session_state.manual_artist, st.session_state.display_layout)
+        if result_img:
+            st.session_state.current_poster = result_img
+            st.session_state.is_standby = False
+            st.session_state.live_mode_toggle = False
+            st.session_state.prev_live_mode = False
+            
+            # --- CLOUD VAULT SYNC ---
+            if current_venue_id:
+                record_id = str(int(time.time() * 1000))
+                timestamp = datetime.now().strftime("%H:%M")
+                url = f"{FIREBASE_BASE}/venues/{current_venue_id}/history/{record_id}.json"
+                payload = {
+                    "id": record_id,
+                    "track": st.session_state.manual_album,
+                    "artist": st.session_state.manual_artist,
+                    "time": timestamp,
+                    "type": "manual"
+                }
+                try:
+                    requests.put(url, json=payload, timeout=3)
+                except Exception:
+                    pass
+
+    st.sidebar.button("Generate Layout", type="primary", on_click=generate_manual_poster)
+    
+    st.sidebar.markdown("---")
+    def unpair_display():
+        requests.delete(f"{FIREBASE_BASE}/venues/{current_venue_id}/displays/{current_display_id}.json")
+        clear_connection()
+        if 'pair_code' in st.session_state: del st.session_state.pair_code
+        st.session_state.current_poster = None
+        st.session_state.last_track = None
+        
+    st.sidebar.button("Unpair Display", type="secondary", on_click=unpair_display, use_container_width=True)
+
+    # --- MAIN DISPLAY AREA ---
+    if live_mode:
+        if st.session_state.is_standby:
+            draw_weather_dashboard(weather_city)
+        elif st.session_state.current_poster:
+            st.image(st.session_state.current_poster, use_container_width=True)
+        else:
+            st.markdown(f"<h3 style='color:gray;text-align:center;margin-top:200px;'>Listening to Venue Cloud...<br><span style='font-size:12px;opacity:0.5;'>Venue: {current_venue_id}<br>Display: {current_display_id}</span></h3>", unsafe_allow_html=True)
+
+        @st.fragment(run_every=3)
+        def background_listener():
+            needs_rerun = False
+            
+            # 1. THE REGISTRY CHECK
+            registry_url = f"{FIREBASE_BASE}/venues/{current_venue_id}/displays/{current_display_id}.json"
+            registry_res = requests.get(registry_url)
+            if registry_res.status_code == 200 and registry_res.json() is None:
+                clear_connection()
+                st.toast("Unpaired from Remote App.", icon="🔌")
+                st.rerun()
+
+            # 2. THE MUSIC CHECK
+            track_found, artist_found = get_current_song_from_cloud(current_venue_id)
+            if track_found and artist_found:
+                st.session_state.last_heard_time = time.time() 
+                
+                song_changed = (track_found != st.session_state.last_track)
+                layout_changed = (display_orientation != st.session_state.last_orientation)
+                
+                if song_changed or layout_changed:
+                    st.session_state.last_track = track_found
+                    st.session_state.last_orientation = display_orientation
+                    st.session_state.is_standby = False
+                    
+                    if song_changed:
+                        st.toast(f"Generating poster for: **{track_found}**", icon="🎨")
+                    else:
+                        st.toast(f"Redrawing layout to **{display_orientation}**...", icon="🔄")
+                    
+                    album_found = get_album_from_track(track_found, artist_found)
+                    if album_found:
+                        new_poster = create_poster(album_found, artist_found, display_orientation)
+                        if new_poster:
+                            st.session_state.current_poster = new_poster
+                            if song_changed:
+                                st.toast(f"Now Displaying: {album_found}", icon="✅")
+                    needs_rerun = True
+
+            time_since_last_song = time.time() - st.session_state.last_heard_time
+            if time_since_last_song > (idle_timeout_mins * 60):
+                if not st.session_state.is_standby:
+                    st.session_state.is_standby = True
+                    st.session_state.current_poster = None
+                    st.session_state.last_track = None
+                    st.toast("💤 Entering Standby Mode", icon="☁️")
+                    needs_rerun = True
+                    
+            if needs_rerun:
+                st.rerun()
+                
+        background_listener()
+
+    else:
+        if st.session_state.current_poster:
+            st.image(st.session_state.current_poster, use_container_width=True)
+        else:
+            st.markdown("<h3 style='color:gray;text-align:center;margin-top:200px;'>Manual Mode Active<br><span style='font-size: 0.6em; font-weight: normal;'>Use the sidebar to generate a poster.</span></h3>", unsafe_allow_html=True)
