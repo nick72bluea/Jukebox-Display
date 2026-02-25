@@ -1,10 +1,7 @@
 import streamlit as st
-import base64  # Add this at the very top of the file
-import json
 import firebase_admin
 from firebase_admin import credentials, db
 import os
-import json
 import time
 from datetime import datetime
 
@@ -16,26 +13,25 @@ def get_secret(key, default=None):
     except Exception:
         return default
 
-import base64  # Add this at the very top of the file
-
-import json
-
 def init_firebase():
-    def init_firebase():
     if firebase_admin._apps:
         return True
     
-    service_account_json = get_secret("FIREBASE_SERVICE_ACCOUNT_JSON")
+    # We fetch the table we just created in secrets
+    service_account_info = get_secret("FIREBASE_SERVICE_ACCOUNT")
     db_url = "https://posterjukebox-default-rtdb.europe-west1.firebasedatabase.app"
     
-    if not service_account_json:
+    if not service_account_info:
+        st.error("Missing FIREBASE_SERVICE_ACCOUNT in Secrets")
         return False
 
     try:
-        # We ensure the string is treated as a clean JSON format
-        # and replace any literal '\n' text with actual newlines
-        clean_json = service_account_json.replace("\\n", "\n")
-        cert_dict = json.loads(clean_json)
+        # Convert Streamlit secrets proxy to a real dict
+        cert_dict = dict(service_account_info)
+        
+        # Ensure the private key is clean
+        if "private_key" in cert_dict:
+            cert_dict["private_key"] = cert_dict["private_key"].strip()
             
         cred = credentials.Certificate(cert_dict)
         firebase_admin.initialize_app(cred, {'databaseURL': db_url})
