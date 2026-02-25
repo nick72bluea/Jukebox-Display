@@ -144,7 +144,6 @@ def create_poster(album_name, artist_name, orientation="Portrait"):
             track_lines = max(1, (len(display_tracks) + 1) // 2)
             track_spacing = min(50, available_space // track_lines) if track_lines > 0 else 50
 
-        # Allow text to stretch further into the center gap, and drop font size slightly to fit long titles
         # Restore the middle gap and significantly reduce the font size
         max_col_width = (poster_w - (padding * 2)) // 2 - 20 
         font_tracks = get_safe_font(22)
@@ -192,7 +191,7 @@ def create_poster(album_name, artist_name, orientation="Portrait"):
         new_y_after_artist = draw_wrapped_text(draw, artist_name.upper(), get_safe_font(artist_size), max_title_width, right_edge_x, padding - 10, "white", "right")
         new_y_after_title = draw_wrapped_text(draw, clean_name.upper(), get_safe_font(title_size), max_title_width, right_edge_x, new_y_after_artist + 15, "#e0e0e0", "right")
 
-track_y_start = new_y_after_title + 70 
+        track_y_start = new_y_after_title + 70 
         
         # --- REDUCED TEXT SIZE & TIGHTER SPACING FOR LANDSCAPE ---
         font_tracks = get_safe_font(24) # Shrunk from 34 to 24
