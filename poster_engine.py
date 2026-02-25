@@ -144,8 +144,9 @@ def create_poster(album_name, artist_name, orientation="Portrait"):
             track_lines = max(1, (len(display_tracks) + 1) // 2)
             track_spacing = min(50, available_space // track_lines) if track_lines > 0 else 50
 
-        max_col_width = (poster_w - (padding * 2)) // 2 - 30 
-        font_tracks = get_safe_font(34)
+        # Allow text to stretch further into the center gap, and drop font size slightly to fit long titles
+        max_col_width = (poster_w - (padding * 2)) // 2 + 50 
+        font_tracks = get_safe_font(30)
 
         mid_point = (len(display_tracks) + 1) // 2
         for i, track in enumerate(display_tracks[:mid_point]):
