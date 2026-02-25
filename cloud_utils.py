@@ -27,17 +27,13 @@ def init_firebase():
         return False
 
     try:
-        if isinstance(service_account_info, str):
-            cert_dict = json.loads(service_account_info)
-        else:
-         # Convert to dictionary if it isn't already
+        # Convert the Streamlit secret object to a dictionary
         cert_dict = dict(service_account_info)
         
-        # Clean up the private key for the PEM loader
+        # Clean up the private key
         if "private_key" in cert_dict:
-            # Replace literal slash-n with actual newline characters
+            # This handles both the literal and escaped newlines
             pk = cert_dict["private_key"].replace("\\n", "\n")
-            # Remove any accidental extra spaces around the key
             cert_dict["private_key"] = pk.strip()
             
         cred = credentials.Certificate(cert_dict)
