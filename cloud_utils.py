@@ -21,27 +21,21 @@ import base64  # Add this at the very top of the file
 import json
 
 def init_firebase():
+    def init_firebase():
     if firebase_admin._apps:
         return True
     
-    # We look for the new JSON string secret
     service_account_json = get_secret("FIREBASE_SERVICE_ACCOUNT_JSON")
     db_url = "https://posterjukebox-default-rtdb.europe-west1.firebasedatabase.app"
     
     if not service_account_json:
-        st.error("Missing FIREBASE_SERVICE_ACCOUNT_JSON in Secrets!")
         return False
 
     try:
-        # If it's a string, parse it as JSON. If Streamlit already parsed it, use as is.
-        if isinstance(service_account_json, str):
-            cert_dict = json.loads(service_account_json)
-        else:
-            cert_dict = dict(service_account_json)
-            
-        # Standardize the private key line breaks
-        if "private_key" in cert_dict:
-            cert_dict["private_key"] = cert_dict["private_key"].replace("\\n", "\n")
+        # We ensure the string is treated as a clean JSON format
+        # and replace any literal '\n' text with actual newlines
+        clean_json = service_account_json.replace("\\n", "\n")
+        cert_dict = json.loads(clean_json)
             
         cred = credentials.Certificate(cert_dict)
         firebase_admin.initialize_app(cred, {'databaseURL': db_url})
