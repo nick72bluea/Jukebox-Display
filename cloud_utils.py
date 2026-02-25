@@ -38,6 +38,8 @@ def init_firebase():
     except Exception as e:
         st.error(f"Firebase Connection Error: {e}")
         return False
+
+
 def get_current_song(venue_id):
     try:
         ref = db.reference(f"venues/{venue_id}/now_playing")
