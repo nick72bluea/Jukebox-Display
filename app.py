@@ -117,7 +117,25 @@ if 'is_standby' not in st.session_state: st.session_state.is_standby = False
 # --- HELPERS (Cloud, Weather, Text) ---
 
 
+def get_current_song_from_cloud(venue_id):
 
+    url = f"{FIREBASE_BASE}/venues/{venue_id}/now_playing.json"
+
+    try:
+
+        response = requests.get(url, timeout=5)
+
+        if response.status_code == 200:
+
+            data = response.json()
+
+            if data and 'track' in data and 'artist' in data:
+
+                return data['track'], data['artist']
+
+    except Exception: pass 
+
+    return None, None
 
 
 
