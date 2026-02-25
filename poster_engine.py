@@ -192,12 +192,14 @@ def create_poster(album_name, artist_name, orientation="Portrait"):
         new_y_after_artist = draw_wrapped_text(draw, artist_name.upper(), get_safe_font(artist_size), max_title_width, right_edge_x, padding - 10, "white", "right")
         new_y_after_title = draw_wrapped_text(draw, clean_name.upper(), get_safe_font(title_size), max_title_width, right_edge_x, new_y_after_artist + 15, "#e0e0e0", "right")
 
-        track_y_start = new_y_after_title + 70 
-        font_tracks = get_safe_font(34)
+track_y_start = new_y_after_title + 70 
+        
+        # --- REDUCED TEXT SIZE & TIGHTER SPACING FOR LANDSCAPE ---
+        font_tracks = get_safe_font(24) # Shrunk from 34 to 24
         meta_y = poster_h - padding - 45
         
         if len(display_tracks) <= 11:
-            track_spacing = 45
+            track_spacing = 40 # Tightened from 45
             max_track_width = right_edge_x - text_start_x
             for i, track in enumerate(display_tracks):
                 text = truncate_text(f"{track} .{i+1}", font_tracks, max_track_width)
@@ -206,16 +208,17 @@ def create_poster(album_name, artist_name, orientation="Portrait"):
             mid_point = (len(display_tracks) + 1) // 2
             
             available_space = meta_y - track_y_start - 20
-            optimal_spacing = available_space // mid_point if mid_point > 0 else 45
-            track_spacing = min(45, optimal_spacing)
+            optimal_spacing = available_space // mid_point if mid_point > 0 else 40
+            track_spacing = min(40, optimal_spacing) # Tightened from 45
             
-            # Anti-squish logic for Landscape too!
-            if track_spacing < 35:
+            # Anti-squish logic for Landscape
+            if track_spacing < 30:
                 display_tracks = display_tracks[:18]
                 mid_point = (len(display_tracks) + 1) // 2
-                track_spacing = min(45, available_space // mid_point) if mid_point > 0 else 45
+                track_spacing = min(40, available_space // mid_point) if mid_point > 0 else 40
                 
-            max_col_width = (right_edge_x - text_start_x) // 2 - 20
+            # Keep a nice clean gutter in the middle of the columns
+            max_col_width = (right_edge_x - text_start_x) // 2 - 30 
             
             for i, track in enumerate(display_tracks[:mid_point]):
                 text = truncate_text(f"{i+1}. {track}", font_tracks, max_col_width)
