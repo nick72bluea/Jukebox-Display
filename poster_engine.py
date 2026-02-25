@@ -5,11 +5,13 @@ from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from datetime import datetime
 import re
-import os
+import streamlit as st
 
 # --- CREDENTIALS ---
-SPOTIPY_CLIENT_ID = os.environ.get('SPOTIPY_CLIENT_ID', '02c1d6fcc3a149138d815e4036c0c36e')
-SPOTIPY_CLIENT_SECRET = os.environ.get('SPOTIPY_CLIENT_SECRET', '7e96739194134d83ba322af5cefd9af4')
+SPOTIPY_CLIENT_ID = st.secrets["SPOTIPY_CLIENT_ID"]
+SPOTIPY_CLIENT_SECRET = st.secrets["SPOTIPY_CLIENT_SECRET"]
+
+# --- TEXT HELPERS ---
 
 # --- TEXT HELPERS ---
 def clean_album_title(title):
