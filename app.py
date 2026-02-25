@@ -1,17 +1,17 @@
+import streamlit as st
+import time, random, string
 import sys
 import os
 
-# Ensure the app can see local modules in the current directory
+# Ensure local modules are discoverable
 sys.path.append(os.path.dirname(__file__))
 
-import streamlit as st
-import time, random, string
 from cloud_utils import init_firebase, get_current_song, get_secret, log_manual_history
 from poster_engine import create_poster, get_album_from_track
 from weather_utils import draw_weather_dashboard
 from firebase_admin import db
 
-# 1. SETUP & INIT (Must be the very first Streamlit command)
+# 1. SETUP & INIT
 st.set_page_config(page_title="Jukebox Funk TV", layout="wide")
 
 # Hide Streamlit UI elements
@@ -22,12 +22,11 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Initialize Firebase and STOP if it fails
+# Initialize Firebase
 if not init_firebase():
-    st.warning("📡 Awaiting Firebase connection... Please check your Streamlit Secrets.")
+    st.warning("📡 Awaiting Firebase connection... Check your Secrets.")
     st.stop()
 
-# Get Spotify Credentials
 CID = get_secret("SPOTIPY_CLIENT_ID")
 SEC = get_secret("SPOTIPY_CLIENT_SECRET")
 
@@ -37,16 +36,12 @@ d_id = st.query_params.get("display_id")
 
 # 3. APP LOGIC
 if not v_id:
-    # --- ONBOARDING ROOM ---
     if 'pair_code' not in st.session_state:
         st.session_state.pair_code = ''.join(random.choices(string.digits, k=6))
         st.session_state.temp_id = 'disp_' + ''.join(random.choices(string.ascii_lowercase, k=8))
-        try:
-            db.reference(f"pairing_codes/{st.session_state.pair_code}").set({
-                "status": "waiting", "display_id": st.session_state.temp_id, "timestamp": time.time()
-            })
-        except Exception as e:
-            st.error(f"Database Error: {e}")
+        db.reference(f"pairing_codes/{st.session_state.pair_code}").set({
+            "status": "waiting", "display_id": st.session_state.temp_id, "timestamp": time.time()
+        })
     
     st.markdown(f"<h1 style='text-align:center; font-size:10rem; margin-top:20vh;'>{st.session_state.pair_code}</h1>", unsafe_allow_html=True)
     
@@ -60,43 +55,25 @@ if not v_id:
     st.rerun()
 
 else:
-    # --- PAIRED STATE ---
     if 'current_poster' not in st.session_state: st.session_state.current_poster = None
     if 'last_track' not in st.session_state: st.session_state.last_track = None
     if 'is_standby' not in st.session_state: st.session_state.is_standby = False
     if 'last_heard_time' not in st.session_state: st.session_state.last_heard_time = time.time()
 
-    # --- SIDEBAR UI ---
+    # SIDEBAR
     st.sidebar.markdown("## ⚙️ TV Settings")
     orient = st.sidebar.radio("Layout", ["Portrait", "Landscape"], index=1)
     weather_city = st.sidebar.text_input("Weather City", "London")
     idle_mins = st.sidebar.slider("Standby Timeout (Mins)", 1, 15, 5)
-    
-    st.sidebar.markdown("---")
     live_mode = st.sidebar.toggle("📺 CONNECT TO CLOUD REMOTE", value=True)
 
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### 🎸 Manual Search")
-    m_art = st.sidebar.text_input("Artist", "Oasis")
-    m_alb = st.sidebar.text_input("Album", "Definitely Maybe")
-    
-    if st.sidebar.button("Generate Layout", type="primary"):
-        img = create_poster(m_alb, m_art, orient, CID, SEC)
-        if img:
-            st.session_state.current_poster = img
-            st.session_state.is_standby = False
-            log_manual_history(v_id, m_alb, m_art)
-
-    st.sidebar.markdown("---")
     if st.sidebar.button("Unpair Display", type="secondary"):
         db.reference(f"venues/{v_id}/displays/{d_id}").delete()
         st.query_params.clear()
         st.rerun()
 
-    # --- BACKGROUND SYNC (The Fragment) ---
     @st.fragment(run_every=3)
     def sync_listener():
-        # Check for remote unpairing
         check = db.reference(f"venues/{v_id}/displays/{d_id}").get()
         if check is None:
             st.query_params.clear()
@@ -115,7 +92,6 @@ else:
                         st.session_state.current_poster = img
                         st.rerun()
             
-            # Standby logic
             if (time.time() - st.session_state.last_heard_time) > (idle_mins * 60):
                 if not st.session_state.is_standby:
                     st.session_state.is_standby = True
@@ -123,7 +99,6 @@ else:
 
     sync_listener()
 
-    # --- MAIN STAGE RENDERING ---
     if st.session_state.is_standby:
         draw_weather_dashboard(weather_city)
     elif st.session_state.current_poster:
