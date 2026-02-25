@@ -15,7 +15,7 @@ def get_secret(key, default=None):
         return default
 
 def init_firebase():
-    """Initializes Firebase Admin SDK and returns the database base URL."""
+    """Initializes Firebase Admin SDK using Secrets or Env Vars."""
     service_account_info = get_secret("FIREBASE_SERVICE_ACCOUNT")
     db_url = "https://posterjukebox-default-rtdb.europe-west1.firebasedatabase.app"
     
