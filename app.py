@@ -140,8 +140,6 @@ def get_current_song_from_cloud(venue_id):
 
 
 
-    st.markdown(html, unsafe_allow_html=True)
-
 
 
 def clean_album_title(title):
