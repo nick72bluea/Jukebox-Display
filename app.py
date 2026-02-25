@@ -1,3 +1,9 @@
+import sys
+import os
+
+# Ensure the app can see local modules in the current directory
+sys.path.append(os.path.dirname(__file__))
+
 import streamlit as st
 import time, random, string
 from cloud_utils import init_firebase, get_current_song, get_secret, log_manual_history
@@ -5,20 +11,7 @@ from poster_engine import create_poster, get_album_from_track
 from weather_utils import draw_weather_dashboard
 from firebase_admin import db
 
-# 1. SETUP & INIT
-st.set_page_config(page_title="Jukebox Funk TV", layout="wide")
-
-# Initialize Firebase and STOP if it fails
-if not init_firebase():
-    st.warning("Awaiting Firebase connection... Check your Secrets.")
-    st.stop()
-
-# Get Spotify Credentials
-CID = get_secret("SPOTIPY_CLIENT_ID")
-SEC = get_secret("SPOTIPY_CLIENT_SECRET")
-
-# --- Rest of your app code (Routing, Sidebar, etc.) ---
-
+# 1. SETUP & INIT (Must be the very first Streamlit command)
 st.set_page_config(page_title="Jukebox Funk TV", layout="wide")
 
 # Hide Streamlit UI elements
@@ -28,6 +21,15 @@ st.markdown("""
     [data-testid="stHeader"] {background: transparent !important;}
     </style>
 """, unsafe_allow_html=True)
+
+# Initialize Firebase and STOP if it fails
+if not init_firebase():
+    st.warning("📡 Awaiting Firebase connection... Please check your Streamlit Secrets.")
+    st.stop()
+
+# Get Spotify Credentials
+CID = get_secret("SPOTIPY_CLIENT_ID")
+SEC = get_secret("SPOTIPY_CLIENT_SECRET")
 
 # 2. ROUTING DATA
 v_id = st.query_params.get("venue_id")
@@ -39,9 +41,12 @@ if not v_id:
     if 'pair_code' not in st.session_state:
         st.session_state.pair_code = ''.join(random.choices(string.digits, k=6))
         st.session_state.temp_id = 'disp_' + ''.join(random.choices(string.ascii_lowercase, k=8))
-        db.reference(f"pairing_codes/{st.session_state.pair_code}").set({
-            "status": "waiting", "display_id": st.session_state.temp_id, "timestamp": time.time()
-        })
+        try:
+            db.reference(f"pairing_codes/{st.session_state.pair_code}").set({
+                "status": "waiting", "display_id": st.session_state.temp_id, "timestamp": time.time()
+            })
+        except Exception as e:
+            st.error(f"Database Error: {e}")
     
     st.markdown(f"<h1 style='text-align:center; font-size:10rem; margin-top:20vh;'>{st.session_state.pair_code}</h1>", unsafe_allow_html=True)
     
@@ -61,7 +66,7 @@ else:
     if 'is_standby' not in st.session_state: st.session_state.is_standby = False
     if 'last_heard_time' not in st.session_state: st.session_state.last_heard_time = time.time()
 
-    # --- SIDEBAR UI (Must stay outside the Fragment) ---
+    # --- SIDEBAR UI ---
     st.sidebar.markdown("## ⚙️ TV Settings")
     orient = st.sidebar.radio("Layout", ["Portrait", "Landscape"], index=1)
     weather_city = st.sidebar.text_input("Weather City", "London")
