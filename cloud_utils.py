@@ -1,9 +1,20 @@
 import requests
 import time
 from datetime import datetime
+import os
 import streamlit as st
 
-FIREBASE_BASE = st.secrets["FIREBASE_BASE"]
+def get_cred(key):
+    if key in os.environ:
+        return os.environ[key]
+    try:
+        return st.secrets[key]
+    except Exception:
+        return None
+
+FIREBASE_BASE = get_cred("FIREBASE_BASE")
+
+
 
 def get_current_song_from_cloud(venue_id):
     url = f"{FIREBASE_BASE}/venues/{venue_id}/now_playing.json"
