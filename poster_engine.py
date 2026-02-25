@@ -136,7 +136,7 @@ def create_poster(album_name, artist_name, orientation="Portrait"):
         
         # Calculate optimal spacing, but enforce a minimum so text NEVER overlaps
         optimal_spacing = available_space // track_lines if track_lines > 0 else 50
-        track_spacing = min(50, optimal_spacing)
+        track_spacing = min(40, optimal_spacing)
         
         # If tracks are squishing too hard (less than 35px), we trim the tracklist for a clean aesthetic
         if track_spacing < 35:
