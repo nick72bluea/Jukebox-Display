@@ -5,15 +5,26 @@ from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from datetime import datetime
 import re
+import os
 import streamlit as st
 
+# --- SECURE CREDENTIAL FETCHER ---
+def get_cred(key):
+    # Try Railway/Server environment variables first
+    if key in os.environ:
+        return os.environ[key]
+    # Fallback to local Streamlit secrets
+    try:
+        return st.secrets[key]
+    except Exception:
+        return None
+
 # --- CREDENTIALS ---
-SPOTIPY_CLIENT_ID = st.secrets["SPOTIPY_CLIENT_ID"]
-SPOTIPY_CLIENT_SECRET = st.secrets["SPOTIPY_CLIENT_SECRET"]
+SPOTIPY_CLIENT_ID = get_cred("SPOTIPY_CLIENT_ID")
+SPOTIPY_CLIENT_SECRET = get_cred("SPOTIPY_CLIENT_SECRET")
 
 # --- TEXT HELPERS ---
 
-# --- TEXT HELPERS ---
 def clean_album_title(title):
     keywords = [" (deluxe", " [deluxe", " - deluxe", " (remaster", " [remaster", " - remaster", " (expanded", " [expanded", " - expanded", " (original", " [original", " - original"]
     lower_title = title.lower()
