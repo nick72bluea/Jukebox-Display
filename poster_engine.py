@@ -5,10 +5,12 @@ from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from datetime import datetime
 import re
+import os
 
 # --- CREDENTIALS ---
-SPOTIPY_CLIENT_ID = '02c1d6fcc3a149138d815e4036c0c36e'
-SPOTIPY_CLIENT_SECRET = '7e96739194134d83ba322af5cefd9af4'
+# Try to get from environment first (for cloud deployment), then fallback to hardcoded for local testing
+SPOTIPY_CLIENT_ID = os.environ.get('SPOTIPY_CLIENT_ID', '02c1d6fcc3a149138d815e4036c0c36e')
+SPOTIPY_CLIENT_SECRET = os.environ.get('SPOTIPY_CLIENT_SECRET', '7e96739194134d83ba322af5cefd9af4')
 
 # --- TEXT HELPERS ---
 def clean_album_title(title):
@@ -17,7 +19,7 @@ def clean_album_title(title):
     for kw in keywords:
         if kw in lower_title:
             title = title[:lower_title.index(kw)]
-            lower_title = title.lower() 
+            lower_title = title.lower()
     return title.strip() if title.strip() else title
 
 def clean_track_title(title):
@@ -33,7 +35,7 @@ def draw_wrapped_text(draw, text, font, max_width, x_anchor, start_y, fill, alig
         else: lines.append(current_line); current_line = word
     lines.append(current_line)
     
-    current_y, line_height = start_y, font.getbbox("A")[3] + 10 
+    current_y, line_height = start_y, font.getbbox("A")[3] + 10
     for line in lines:
         if align == "right":
             draw.text((x_anchor - font.getlength(line), current_y), line, font=font, fill=fill)
@@ -60,14 +62,14 @@ def get_album_from_track(track_name, artist_name):
 def create_poster(album_name, artist_name, orientation="Portrait"):
     sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(client_id=SPOTIPY_CLIENT_ID, client_secret=SPOTIPY_CLIENT_SECRET))
     results = sp.search(q=f"album:{album_name} artist:{artist_name}", type='album', limit=1)
-    if not results['albums']['items']: 
+    if not results['albums']['items']:
         results = sp.search(q=f"{album_name}", type='album', limit=1)
     if not results['albums']['items']: return None
     
     album = results['albums']['items'][0]
     album_details = sp.album(album['id'])
     clean_name = clean_album_title(album['name'])
-    cover_url, uri = album['images'][0]['url'], album['uri'] 
+    cover_url, uri = album['images'][0]['url'], album['uri']
 
     try: release_date = datetime.strptime(album_details['release_date'], '%Y-%m-%d').strftime('%b %d, %Y').upper()
     except ValueError: release_date = album_details['release_date']
@@ -89,117 +91,3 @@ def create_poster(album_name, artist_name, orientation="Portrait"):
         spotify_code_img = Image.open(BytesIO(code_response.content)).convert("RGBA")
         spotify_code_img.putdata([(255, 255, 255, int(sum(item[:3]) / 3)) for item in spotify_code_img.getdata()])
     else: spotify_code_img = Image.new('RGBA', (640, 160), (255, 255, 255, 0))
-
-    def get_safe_font(size):
-        font_paths = ["/System/Library/Fonts/Supplemental/Arial Narrow Bold.ttf", "/System/Library/Fonts/Supplemental/Arial Bold.ttf", "/Library/Fonts/Arial Bold.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"]
-        for path in font_paths:
-            try: return ImageFont.truetype(path, size)
-            except IOError: continue
-        return ImageFont.load_default()
-
-    if orientation == "Portrait":
-        poster_w, poster_h, padding = 1200, 1800, 70
-        cover_size = poster_w - (padding * 2)
-        
-        bg_img = cover_img.resize((poster_w, poster_h)).filter(ImageFilter.GaussianBlur(radius=40))
-        poster = Image.alpha_composite(bg_img, Image.new('RGBA', bg_img.size, (0, 0, 0, 130)))
-        draw = ImageDraw.Draw(poster)
-        
-        draw.rectangle([padding-3, padding-3, padding+cover_size+2, padding+cover_size+2], fill="black")
-        poster.paste(cover_img.resize((cover_size, cover_size)), (padding, padding))
-        
-        code_y = padding + cover_size + 45      
-        code_w = int((90 / spotify_code_img.height) * spotify_code_img.width)
-        poster.paste(spotify_code_img.resize((code_w, 90)), (padding, code_y), spotify_code_img.resize((code_w, 90)))
-
-        title_size = 34 if len(clean_name) > 30 else (38 if len(clean_name) > 20 else 42)
-        artist_size = 45 if len(artist_name) > 35 else (60 if len(artist_name) > 25 else 75)
-        
-        max_text_width = (poster_w - padding) - (padding + code_w + 20)
-        new_y_after_artist = draw_wrapped_text(draw, artist_name.upper(), get_safe_font(artist_size), max_text_width, poster_w - padding, code_y - 12, "white", "right")
-        new_y_after_title = draw_wrapped_text(draw, clean_name.upper(), get_safe_font(title_size), max_text_width, poster_w - padding, new_y_after_artist + 5, "white", "right")
-
-        track_y_start = new_y_after_title + 50 
-        meta_y, bar_y = poster_h - padding - 45, poster_h - padding + 5
-        
-        track_lines = max(1, (len(display_tracks) + 1) // 2)
-        track_spacing = min(48, (meta_y - track_y_start - 20) // track_lines)
-        max_col_width = (poster_w - (padding * 2)) // 2 - 30 
-        font_tracks = get_safe_font(34)
-
-        mid_point = (len(display_tracks) + 1) // 2
-        for i, track in enumerate(display_tracks[:mid_point]):
-            text = truncate_text(f"{i+1}. {track}", font_tracks, max_col_width)
-            draw.text((padding, track_y_start + (i * track_spacing)), text, font=font_tracks, fill="white")
-            
-        for i, track in enumerate(display_tracks[mid_point:]):
-            text = truncate_text(f"{track} .{mid_point+i+1}", font_tracks, max_col_width)
-            draw.text((poster_w - padding, track_y_start + (i * track_spacing)), text, font=font_tracks, fill="white", anchor="ra")
-
-        draw.text((padding, meta_y), f"RELEASE DATE: {release_date}", font=get_safe_font(19), fill="#e0e0e0")
-        draw.text((poster_w - padding, meta_y), f"ALBUM DURATION: {duration_str}", font=get_safe_font(19), fill="#e0e0e0", anchor="ra")
-
-        segment_w = cover_size // 4
-        for i in range(4):
-            color = cover_img.crop((i * (cover_img.width // 4), 0, (i + 1) * (cover_img.width // 4), cover_img.height)).resize((1, 1), resample=Image.Resampling.LANCZOS).getpixel((0, 0))
-            draw.rectangle([padding + (i * segment_w), bar_y, padding + ((i + 1) * segment_w), bar_y + 20], fill=color)
-
-    else:
-        poster_w, poster_h, padding = 1920, 1080, 80
-        cover_size = 800 
-        
-        bg_img = cover_img.resize((poster_w, poster_h)).filter(ImageFilter.GaussianBlur(radius=50))
-        poster = Image.alpha_composite(bg_img, Image.new('RGBA', bg_img.size, (0, 0, 0, 160))) 
-        draw = ImageDraw.Draw(poster)
-        
-        draw.rectangle([padding-3, padding-3, padding+cover_size+2, padding+cover_size+2], fill="black")
-        poster.paste(cover_img.resize((cover_size, cover_size)), (padding, padding))
-        
-        text_start_x = padding + cover_size + 80
-        code_w = int((100 / spotify_code_img.height) * spotify_code_img.width)
-        poster.paste(spotify_code_img.resize((code_w, 100)), (text_start_x, padding), spotify_code_img.resize((code_w, 100)))
-
-        right_edge_x = poster_w - padding
-        max_title_width = (poster_w - padding) - (text_start_x + code_w + 40)
-        
-        artist_size = 70 if len(artist_name) > 25 else 90
-        title_size = 40 if len(clean_name) > 30 else 50
-        
-        new_y_after_artist = draw_wrapped_text(draw, artist_name.upper(), get_safe_font(artist_size), max_title_width, right_edge_x, padding - 10, "white", "right")
-        new_y_after_title = draw_wrapped_text(draw, clean_name.upper(), get_safe_font(title_size), max_title_width, right_edge_x, new_y_after_artist + 15, "#e0e0e0", "right")
-
-        track_y_start = new_y_after_title + 70 
-        font_tracks = get_safe_font(34)
-        meta_y = poster_h - padding - 45
-        
-        if len(display_tracks) <= 11:
-            track_spacing = 45
-            max_track_width = right_edge_x - text_start_x
-            for i, track in enumerate(display_tracks):
-                text = truncate_text(f"{track} .{i+1}", font_tracks, max_track_width)
-                draw.text((right_edge_x, track_y_start + (i * track_spacing)), text, font=font_tracks, fill="white", anchor="ra")
-        else:
-            mid_point = (len(display_tracks) + 1) // 2
-            track_spacing = min(45, (meta_y - track_y_start - 20) // mid_point) 
-            max_col_width = (right_edge_x - text_start_x) // 2 - 20
-            
-            for i, track in enumerate(display_tracks[:mid_point]):
-                text = truncate_text(f"{i+1}. {track}", font_tracks, max_col_width)
-                draw.text((text_start_x, track_y_start + (i * track_spacing)), text, font=font_tracks, fill="white")
-                
-            for i, track in enumerate(display_tracks[mid_point:]):
-                text = truncate_text(f"{track} .{mid_point+i+1}", font_tracks, max_col_width)
-                draw.text((right_edge_x, track_y_start + (i * track_spacing)), text, font=font_tracks, fill="white", anchor="ra")
-
-        draw.text((padding, meta_y), f"RELEASE DATE: {release_date}", font=get_safe_font(22), fill="#cccccc")
-        draw.text((poster_w - padding, meta_y), f"ALBUM DURATION: {duration_str}", font=get_safe_font(22), fill="#cccccc", anchor="ra")
-
-        bar_y = poster_h - padding + 5
-        bar_width = poster_w - (padding * 2)
-        segment_w = bar_width // 4
-        
-        for i in range(4):
-            color = cover_img.crop((i * (cover_img.width // 4), 0, (i + 1) * (cover_img.width // 4), cover_img.height)).resize((1, 1), resample=Image.Resampling.LANCZOS).getpixel((0, 0))
-            draw.rectangle([padding + (i * segment_w), bar_y, padding + ((i + 1) * segment_w), bar_y + 20], fill=color)
-
-    return poster
