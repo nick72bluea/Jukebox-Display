@@ -1,20 +1,19 @@
 import streamlit as st
-import time, random, string, requests
+import time, random, string
 from cloud_utils import init_firebase, get_current_song, get_secret, log_manual_history
 from poster_engine import create_poster, get_album_from_track
 from weather_utils import draw_weather_dashboard
 from firebase_admin import db
 
-# 1. INIT
+# 1. SETUP
 db_url = init_firebase()
 CID = get_secret("SPOTIPY_CLIENT_ID")
 SEC = get_secret("SPOTIPY_CLIENT_SECRET")
 
-# 2. CSS & SETUP
 st.set_page_config(page_title="Jukebox Funk TV", layout="wide")
-st.markdown("<style> [data-testid='stToolbar'], footer {display: none !important;} </style>", unsafe_allow_html=True)
+st.markdown("<style>[data-testid='stToolbar'], footer {display: none !important;}</style>", unsafe_allow_html=True)
 
-# 3. ROUTING
+# 2. ROUTING
 v_id = st.query_params.get("venue_id")
 d_id = st.query_params.get("display_id")
 
@@ -36,27 +35,32 @@ if not v_id:
         st.rerun()
     time.sleep(2)
     st.rerun()
+
 else:
     # --- MAIN TV UI ---
-    st.sidebar.markdown("## ⚙️ TV Settings")
-    orient = st.sidebar.radio("Layout", ["Portrait", "Landscape"], index=1)
-    live_mode = st.sidebar.toggle("📺 CONNECT TO CLOUD REMOTE", value=True)
-    
     if 'current_poster' not in st.session_state: st.session_state.current_poster = None
     if 'last_track' not in st.session_state: st.session_state.last_track = None
+    if 'is_standby' not in st.session_state: st.session_state.is_standby = False
+    if 'last_heard_time' not in st.session_state: st.session_state.last_heard_time = time.time()
 
-    if live_mode:
-        @st.fragment(run_every=3)
-        def sync():
-            t, a = get_current_song(v_id)
-            if t and t != st.session_state.last_track:
-                st.session_state.last_track = t
-                alb = get_album_from_track(t, a, CID, SEC) or t
-                img = create_poster(alb, a, orient, CID, SEC)
-                if img:
-                    st.session_state.current_poster = img
-                    st.rerun()
-        sync()
+    st.sidebar.markdown("## ⚙️ TV Settings")
+    orient = st.sidebar.radio("Layout", ["Portrait", "Landscape"], index=1)
+    weather_city = st.sidebar.text_input("Weather City", "London")
+    idle_mins = st.sidebar.slider("Standby Timeout (Mins)", 1, 15, 5)
+    
+    st.sidebar.markdown("---")
+    live_mode = st.sidebar.toggle("📺 CONNECT TO CLOUD REMOTE", value=True)
 
-    if st.session_state.current_poster:
-        st.image(st.session_state.current_poster, use_container_width=True)
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### 🎸 Manual Search")
+    m_art = st.sidebar.text_input("Artist", "Oasis")
+    m_alb = st.sidebar.text_input("Album", "Definitely Maybe")
+    
+    if st.sidebar.button("Generate Layout", type="primary"):
+        img = create_poster(m_alb, m_art, orient, CID, SEC)
+        if img:
+            st.session_state.current_poster = img
+            st.session_state.is_standby = False
+            log_manual_history(v_id, m_alb, m_art)
+
+    st.sidebar
