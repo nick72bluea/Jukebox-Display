@@ -1,50 +1,59 @@
-import streamlit as st
-import firebase_admin
-from firebase_admin import credentials, db
-import base64
-import os
+import requests
 import time
 from datetime import datetime
 
-def get_secret(key, default=None):
+FIREBASE_BASE = "https://posterjukebox-default-rtdb.europe-west1.firebasedatabase.app"
+
+def get_current_song_from_cloud(venue_id):
+    url = f"{FIREBASE_BASE}/venues/{venue_id}/now_playing.json"
     try:
-        return st.secrets.get(key, default)
-    except:
-        return default
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            if data and 'track' in data and 'artist' in data:
+                return data['track'], data['artist']
+    except Exception: pass 
+    return None, None
 
-def init_firebase():
-    if firebase_admin._apps:
-        return True
-    
-    b64_key = get_secret("FIREBASE_KEY_BASE64")
-    if not b64_key:
-        st.error("Missing FIREBASE_KEY_BASE64 in Secrets")
-        return False
+def log_manual_history(venue_id, album, artist):
+    record_id = str(int(time.time() * 1000))
+    url = f"{FIREBASE_BASE}/venues/{venue_id}/history/{record_id}.json"
+    payload = {
+        "id": record_id,
+        "track": album,
+        "artist": artist,
+        "time": datetime.now().strftime("%H:%M"),
+        "type": "manual"
+    }
+    try: requests.put(url, json=payload, timeout=3)
+    except Exception: pass
 
+def init_pairing_code(code, display_id):
+    url = f"{FIREBASE_BASE}/pairing_codes/{code}.json"
+    payload = {"status": "waiting", "display_id": display_id, "timestamp": time.time()}
+    try: requests.put(url, json=payload, timeout=3)
+    except Exception: pass
+
+def check_pairing_status(code):
+    url = f"{FIREBASE_BASE}/pairing_codes/{code}.json"
     try:
-        # Decode the key safely
-        decoded_key = base64.b64decode(b64_key).decode("utf-8")
-        
-        # This dict uses the same values from your project
-        cert_dict = {
-            "type": "service_account",
-            "project_id": "posterjukebox",
-            "private_key_id": "5dfa6f9688d66a95835e469005de46d325ab5615",
-            "private_key": decoded_key,
-            "client_email": "firebase-adminsdk-fbsvc@posterjukebox.iam.gserviceaccount.com",
-            "client_id": "102973933404996152824",
-            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-            "token_uri": "https://oauth2.googleapis.com/token",
-            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-            "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40posterjukebox.iam.gserviceaccount.com"
-        }
-        
-        db_url = "https://posterjukebox-default-rtdb.europe-west1.firebasedatabase.app"
-        cred = credentials.Certificate(cert_dict)
-        firebase_admin.initialize_app(cred, {'databaseURL': db_url})
-        return True
-    except Exception as e:
-        st.error(f"Final Attempt Failed: {e}")
-        return False
+        res = requests.get(url, timeout=5).json()
+        if res and res.get("status") == "linked" and res.get("venue_id"):
+            requests.delete(url)
+            return res["venue_id"]
+    except Exception: pass
+    return None
 
-# ... keep get_current_song and log_manual_history as they were ...
+def check_if_unpaired(venue_id, display_id):
+    url = f"{FIREBASE_BASE}/venues/{venue_id}/displays/{display_id}.json"
+    try:
+        res = requests.get(url)
+        if res.status_code == 200 and res.json() is None:
+            return True # Missing from database = unpaired
+    except Exception: pass
+    return False
+
+def unpair_from_cloud(venue_id, display_id):
+    url = f"{FIREBASE_BASE}/venues/{venue_id}/displays/{display_id}.json"
+    try: requests.delete(url)
+    except Exception: pass
