@@ -5,9 +5,9 @@ from datetime import datetime
 def get_weather(city_name):
     try:
         geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={city_name}&count=1&format=json"
-        geo_data = requests.get(geo_url, timeout=5).json()
-        if not geo_data.get('results'): return None
-        lat, lon, res_name = geo_data['results'][0]['latitude'], geo_data['results'][0]['longitude'], geo_data['results'][0]['name']
+        geo_res = requests.get(geo_url, timeout=5).json()
+        if not geo_res.get('results'): return None
+        lat, lon, res_name = geo_res['results'][0]['latitude'], geo_res['results'][0]['longitude'], geo_res['results'][0]['name']
         w_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,weather_code&timezone=auto"
         w_data = requests.get(w_url, timeout=5).json()
         return {"temp": w_data['current']['temperature_2m'], "emoji": "☀️", "name": res_name}
