@@ -24,17 +24,19 @@ def init_firebase():
     if not service_account_info:
         return False
 
-    try:
+   try:
+        # Convert secrets object to a dict
         cert_dict = dict(service_account_info)
+        
+        # Just clean up any trailing/leading whitespace
         if "private_key" in cert_dict:
-            pk = cert_dict["private_key"].replace("\\n", "\n")
-            cert_dict["private_key"] = pk.strip()
+            cert_dict["private_key"] = cert_dict["private_key"].strip()
             
         cred = credentials.Certificate(cert_dict)
         firebase_admin.initialize_app(cred, {'databaseURL': db_url})
         return True
     except Exception as e:
-        st.error(f"Firebase Init Failed: {e}")
+        st.error(f"❌ Firebase Init Failed: {e}")
         return False
 
 def get_current_song(venue_id):
