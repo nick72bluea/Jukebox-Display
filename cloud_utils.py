@@ -1,4 +1,7 @@
 import streamlit as st
+import base64  # Add this at the very top of the file
+
+import json
 import firebase_admin
 from firebase_admin import credentials, db
 import os
@@ -16,27 +19,30 @@ def get_secret(key, default=None):
 
 import base64  # Add this at the very top of the file
 
+import json
+
 def init_firebase():
     if firebase_admin._apps:
         return True
     
-    service_account_info = get_secret("FIREBASE_SERVICE_ACCOUNT")
+    # We look for the new JSON string secret
+    service_account_json = get_secret("FIREBASE_SERVICE_ACCOUNT_JSON")
     db_url = "https://posterjukebox-default-rtdb.europe-west1.firebasedatabase.app"
     
-    if not service_account_info:
+    if not service_account_json:
+        st.error("Missing FIREBASE_SERVICE_ACCOUNT_JSON in Secrets!")
         return False
 
     try:
-        cert_dict = dict(service_account_info)
-        
+        # If it's a string, parse it as JSON. If Streamlit already parsed it, use as is.
+        if isinstance(service_account_json, str):
+            cert_dict = json.loads(service_account_json)
+        else:
+            cert_dict = dict(service_account_json)
+            
+        # Standardize the private key line breaks
         if "private_key" in cert_dict:
-            pk = cert_dict["private_key"]
-            # If the key doesn't start with the header, it's likely Base64 encoded
-            if "-----BEGIN PRIVATE KEY-----" not in pk:
-                decoded_bytes = base64.b64decode(pk)
-                cert_dict["private_key"] = decoded_bytes.decode("utf-8")
-            else:
-                cert_dict["private_key"] = pk.replace("\\n", "\n").strip()
+            cert_dict["private_key"] = cert_dict["private_key"].replace("\\n", "\n")
             
         cred = credentials.Certificate(cert_dict)
         firebase_admin.initialize_app(cred, {'databaseURL': db_url})
