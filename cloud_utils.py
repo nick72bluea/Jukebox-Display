@@ -1,8 +1,9 @@
 import requests
 import time
 from datetime import datetime
+import streamlit as st
 
-FIREBASE_BASE = "https://posterjukebox-default-rtdb.europe-west1.firebasedatabase.app"
+FIREBASE_BASE = st.secrets["FIREBASE_BASE"]
 
 def get_current_song_from_cloud(venue_id):
     url = f"{FIREBASE_BASE}/venues/{venue_id}/now_playing.json"
