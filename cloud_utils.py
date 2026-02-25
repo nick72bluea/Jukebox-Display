@@ -1,6 +1,5 @@
 import streamlit as st
 import base64  # Add this at the very top of the file
-
 import json
 import firebase_admin
 from firebase_admin import credentials, db
