@@ -30,12 +30,15 @@ def init_firebase():
         if isinstance(service_account_info, str):
             cert_dict = json.loads(service_account_info)
         else:
-            cert_dict = dict(service_account_info)
+         # Convert to dictionary if it isn't already
+        cert_dict = dict(service_account_info)
         
+        # Clean up the private key for the PEM loader
         if "private_key" in cert_dict:
-            # Only replace if it's the raw escaped string from JSON
-            if "\\n" in cert_dict["private_key"]:
-                cert_dict["private_key"] = cert_dict["private_key"].replace("\\n", "\n")
+            # Replace literal slash-n with actual newline characters
+            pk = cert_dict["private_key"].replace("\\n", "\n")
+            # Remove any accidental extra spaces around the key
+            cert_dict["private_key"] = pk.strip()
             
         cred = credentials.Certificate(cert_dict)
         firebase_admin.initialize_app(cred, {'databaseURL': db_url})
