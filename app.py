@@ -33,7 +33,6 @@ service_account_info = get_secret("FIREBASE_SERVICE_ACCOUNT")
 if service_account_info:
     try:
         if not firebase_admin._apps:
-            # Handle both dict (Streamlit) and string (Render) formats
             if isinstance(service_account_info, str):
                 cert_dict = json.loads(service_account_info)
             else:
@@ -43,7 +42,6 @@ if service_account_info:
             firebase_admin.initialize_app(cred, {
                 'databaseURL': 'https://posterjukebox-default-rtdb.europe-west1.firebasedatabase.app'
             })
-        # print("✅ Firebase Admin SDK Initialized") # Debugging
     except Exception as e:
         st.error(f"Firebase Init Error: {e}")
 else:
@@ -77,7 +75,7 @@ hide_st_style = """
     </style>
 """
 
-# Lifeboat CSS (Remove this once production ready)
+# Lifeboat CSS (Remove this for pure black background production)
 st.markdown("""
     <style>
     h1, h2, h3, p, div { color: #000000 !important; font-weight: bold !important; }
@@ -85,7 +83,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- CLOUD PERSISTENCE HELPERS ---
+# --- PERSISTENCE HELPERS ---
 def get_saved_venue(): return st.query_params.get("venue_id", None)
 def get_saved_display(): return st.query_params.get("display_id", None)
 def save_connection(vid, did):
@@ -95,21 +93,20 @@ def clear_connection():
     st.query_params.clear()
 
 # --- INIT SESSION STATE ---
-for key, val in {
-    'last_track': None, 'current_poster': None, 
-    'last_heard_time': time.time(), 'is_standby': False,
-    'last_orientation': "Landscape", 'prev_live_mode': False
-}.items():
-    if key not in st.session_state: st.session_state[key] = val
+if 'last_track' not in st.session_state: st.session_state.last_track = None
+if 'current_poster' not in st.session_state: st.session_state.current_poster = None
+if 'last_heard_time' not in st.session_state: st.session_state.last_heard_time = time.time()
+if 'is_standby' not in st.session_state: st.session_state.is_standby = False
+if 'last_orientation' not in st.session_state: st.session_state.last_orientation = "Landscape"
 
-# --- HELPERS (Firebase SDK Powered) ---
+# --- FIREBASE & API HELPERS ---
 def get_current_song_from_cloud(venue_id):
     try:
         ref = db.reference(f"venues/{venue_id}/now_playing")
         data = ref.get()
         if data and 'track' in data and 'artist' in data:
             return data['track'], data['artist']
-    except Exception: pass
+    except: pass
     return None, None
 
 def get_weather(city_name):
@@ -123,7 +120,7 @@ def get_weather(city_name):
         temp, code = wd['current']['temperature_2m'], wd['current']['weather_code']
         emoji = "☀️" if code == 0 else "⛅️" if code < 4 else "🌧️"
         return {"temp": temp, "emoji": emoji, "name": geo_data['results'][0]['name']}
-    except Exception: return None
+    except: return None
 
 def draw_weather_dashboard(city):
     weather = get_weather(city)
@@ -136,9 +133,9 @@ def draw_weather_dashboard(city):
     </div>"""
     st.markdown(html, unsafe_allow_html=True)
 
-# --- POSTER LOGIC ---
+# --- POSTER DESIGN ENGINE ---
 def clean_album_title(title):
-    for kw in [" (deluxe", " [deluxe", " - deluxe", " (remaster", " (original"]:
+    for kw in [" (deluxe", " [deluxe", " - deluxe", " (remaster", " (original", " [original"]:
         if kw in title.lower(): title = title[:title.lower().index(kw)]
     return title.strip()
 
@@ -189,33 +186,46 @@ def create_poster(album_name, artist_name, orientation="Portrait"):
         cover_url = album_data['images'][0]['url']
         uri = album_data['uri']
         
+        # Metadata
+        release_date = album_data['release_date'][:4] # Just the year
+        tracks = [clean_track_title(t['name'].upper()) for t in album_data['tracks']['items']][:20]
+
         # Download images
-        cover_img = Image.open(BytesIO(requests.get(cover_url).content)).convert("RGBA")
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        cover_img = Image.open(BytesIO(requests.get(cover_url, headers=headers).content)).convert("RGBA")
         code_url = f"https://scannables.scdn.co/uri/plain/png/000000/white/640/{uri}"
         code_img = Image.open(BytesIO(requests.get(code_url).content)).convert("RGBA")
 
         w, h = (1200, 1800) if orientation == "Portrait" else (1920, 1080)
-        bg = cover_img.resize((w, h)).filter(ImageFilter.GaussianBlur(40))
-        poster = Image.alpha_composite(bg, Image.new('RGBA', bg.size, (0, 0, 0, 140)))
+        bg = cover_img.resize((w, h)).filter(ImageFilter.GaussianBlur(50))
+        poster = Image.alpha_composite(bg, Image.new('RGBA', bg.size, (0, 0, 0, 150)))
         draw = ImageDraw.Draw(poster)
         
-        # Layout logic simplified for app.py stability
         pad = 80
         c_size = 700 if orientation == "Portrait" else 800
         poster.paste(cover_img.resize((c_size, c_size)), (pad, pad))
         
-        # Draw Artist & Album
-        f_artist = get_safe_font(80)
-        f_album = get_safe_font(40)
-        y = draw_wrapped_text(draw, artist_name.upper(), f_artist, w - pad*2, w - pad, pad, "white")
-        draw_wrapped_text(draw, album_name.upper(), f_album, w - pad*2, w - pad, y + 10, "#ccc")
+        # Text Layout
+        f_artist = get_safe_font(90)
+        f_album = get_safe_font(50)
+        f_tracks = get_safe_font(30)
         
+        y = draw_wrapped_text(draw, artist_name.upper(), f_artist, w - pad*2, w - pad, pad, "white")
+        y = draw_wrapped_text(draw, album_name.upper(), f_album, w - pad*2, w - pad, y + 10, "#e0e0e0")
+        
+        # Tracklist
+        ty = y + 50
+        for i, t in enumerate(tracks):
+            if ty > h - pad: break
+            draw.text((w - pad - f_tracks.getlength(t), ty), t, font=f_tracks, fill="white")
+            ty += 40
+
         return poster
     except Exception as e:
-        print(f"Poster Error: {e}")
+        st.error(f"Design Error: {e}")
         return None
 
-# --- MAIN APP LOGIC ---
+# --- ROUTING LOGIC ---
 current_venue_id = get_saved_venue()
 current_display_id = get_saved_display()
 
@@ -224,57 +234,94 @@ if not current_venue_id or not current_display_id:
     st.markdown("<style>[data-testid='stSidebar'] {display:none;}</style>", unsafe_allow_html=True)
     if 'pair_code' not in st.session_state:
         st.session_state.pair_code = ''.join(random.choices(string.digits, k=6))
-        st.session_state.temp_id = 'disp_' + ''.join(random.choices(string.ascii_lowercase, k=5))
+        st.session_state.temp_id = 'disp_' + ''.join(random.choices(string.ascii_lowercase, k=8))
         try:
             db.reference(f"pairing_codes/{st.session_state.pair_code}").set({
                 "status": "waiting", "display_id": st.session_state.temp_id, "timestamp": time.time()
             })
         except: pass
 
-    st.markdown(f"<h1 style='text-align:center; font-size:8rem; margin-top:20vh;'>{st.session_state.pair_code}</h1>", unsafe_allow_html=True)
+    st.markdown(f"<h3 style='text-align:center; color:#7C3AED; margin-top:20vh;'>LINK YOUR DISPLAY</h3>", unsafe_allow_html=True)
+    st.markdown(f"<h1 style='text-align:center; font-size:10rem; color:white;'>{st.session_state.pair_code}</h1>", unsafe_allow_html=True)
     
-    # Check for link
+    # Poll for link status
     try:
-        res = db.reference(f"pairing_codes/{st.session_state.pair_code}").get()
+        ref = db.reference(f"pairing_codes/{st.session_state.pair_code}")
+        res = ref.get()
         if res and res.get("status") == "linked":
             save_connection(res["venue_id"], st.session_state.temp_id)
-            db.reference(f"pairing_codes/{st.session_state.pair_code}").delete()
+            ref.delete()
             st.rerun()
     except: pass
-    time.sleep(3)
+    time.sleep(2)
     st.rerun()
 
 else:
-    # --- ACTIVE TV MODE ---
+    # --- MAIN TV APP ---
     st.sidebar.title("⚙️ TV Settings")
     display_orientation = st.sidebar.radio("Layout", ["Portrait", "Landscape"], index=1)
-    weather_city = st.sidebar.text_input("City", "London")
-    live_mode = st.sidebar.toggle("📺 CONNECT TO CLOUD", key="live_mode_toggle")
+    weather_city = st.sidebar.text_input("City for Weather", "London")
+    idle_mins = st.sidebar.slider("Standby Timeout (mins)", 1, 15, 5)
     
-    if st.sidebar.button("Unpair"):
+    st.sidebar.markdown("---")
+    live_mode = st.sidebar.toggle("📺 CONNECT TO CLOUD", value=True)
+    
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("🎸 Manual Search")
+    m_artist = st.sidebar.text_input("Artist", "Oasis")
+    m_album = st.sidebar.text_input("Album", "Definitely Maybe")
+    
+    if st.sidebar.button("Generate Layout", type="primary"):
+        with st.spinner("Creating..."):
+            res_img = create_poster(m_album, m_artist, display_orientation)
+            if res_img:
+                st.session_state.current_poster = res_img
+                st.session_state.is_standby = False
+                # Log to history
+                try:
+                    hist_id = str(int(time.time() * 1000))
+                    db.reference(f"venues/{current_venue_id}/history/{hist_id}").set({
+                        "track": m_album, "artist": m_artist, "time": datetime.now().strftime("%H:%M"), "type": "manual"
+                    })
+                except: pass
+
+    if st.sidebar.button("Unpair Display"):
         clear_connection()
         st.rerun()
 
+    # --- DISPLAY LOGIC ---
     if live_mode:
         if st.session_state.is_standby:
             draw_weather_dashboard(weather_city)
         elif st.session_state.current_poster:
             st.image(st.session_state.current_poster, use_container_width=True)
-        
+        else:
+            st.markdown("<h3 style='color:gray;text-align:center;margin-top:20vh;'>Waiting for music...</h3>", unsafe_allow_html=True)
+
         @st.fragment(run_every=5)
-        def sync_loop():
+        def sync_engine():
+            # Check for song changes
             track, artist = get_current_song_from_cloud(current_venue_id)
             if track and track != st.session_state.last_track:
                 st.session_state.last_track = track
+                st.session_state.last_heard_time = time.time()
                 album = get_album_from_track(track, artist) or track
                 new_p = create_poster(album, artist, display_orientation)
                 if new_p:
                     st.session_state.current_poster = new_p
                     st.session_state.is_standby = False
                     st.rerun()
-        sync_loop()
+            
+            # Check for standby
+            if time.time() - st.session_state.last_heard_time > (idle_mins * 60):
+                if not st.session_state.is_standby:
+                    st.session_state.is_standby = True
+                    st.rerun()
+        
+        sync_engine()
     else:
+        # Manual Mode Display
         if st.session_state.current_poster:
             st.image(st.session_state.current_poster, use_container_width=True)
         else:
-            st.info("Manual mode. Use Sidebar to generate.")
+            st.info("Manual Mode Active. Use sidebar to generate.")
