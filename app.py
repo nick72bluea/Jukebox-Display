@@ -6,9 +6,18 @@ from weather_utils import draw_weather_dashboard
 from firebase_admin import db
 
 # 1. SETUP & INIT
-db_url = init_firebase()
+st.set_page_config(page_title="Jukebox Funk TV", layout="wide")
+
+# Initialize Firebase and STOP if it fails
+if not init_firebase():
+    st.warning("Awaiting Firebase connection... Check your Secrets.")
+    st.stop()
+
+# Get Spotify Credentials
 CID = get_secret("SPOTIPY_CLIENT_ID")
 SEC = get_secret("SPOTIPY_CLIENT_SECRET")
+
+# --- Rest of your app code (Routing, Sidebar, etc.) ---
 
 st.set_page_config(page_title="Jukebox Funk TV", layout="wide")
 
