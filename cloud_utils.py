@@ -14,8 +14,6 @@ def get_cred(key):
 
 FIREBASE_BASE = get_cred("FIREBASE_BASE")
 
-
-
 def get_current_song_from_cloud(venue_id):
     url = f"{FIREBASE_BASE}/venues/{venue_id}/now_playing.json"
     try:
@@ -70,7 +68,6 @@ def unpair_from_cloud(venue_id, display_id):
     try: requests.delete(url)
     except Exception: pass
 
-
 def check_subscription_status(venue_id):
     """Checks if the venue has an active Pro subscription."""
     url = f"{FIREBASE_BASE}/venues/{venue_id}.json"
@@ -79,9 +76,7 @@ def check_subscription_status(venue_id):
         if response.status_code == 200:
             data = response.json()
             if data and isinstance(data, dict):
-                # If isPro is True, return True. Otherwise return False.
                 return data.get('isPro', False)
     except Exception: 
         pass 
     return False
-
