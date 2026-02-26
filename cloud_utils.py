@@ -83,6 +83,5 @@ def check_subscription_status(venue_id):
                 return data.get('isPro', False)
     except Exception: 
         pass 
-    return False # If it fails or they aren't pro, default to locked
-            st.markdown("<h3 style='color:gray;text-align:center;margin-top:200px;'>Manual Mode Active<br><span style='font-size: 0.6em; font-weight: normal;'>Use the sidebar to generate a poster.</span></h3>", unsafe_allow_html=True)
+    return False
 
