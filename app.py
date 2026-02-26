@@ -109,7 +109,6 @@ else:
             </div>
         """, unsafe_allow_html=True)
         
-        # Check again every 10 seconds to see if they paid
         time.sleep(10)
         st.rerun()
 
