@@ -192,4 +192,18 @@ else:
         if st.session_state.current_poster:
             st.image(st.session_state.current_poster, use_container_width=True)
         else:
+
+    def check_subscription_status(venue_id):
+    """Checks if the venue has an active Pro subscription."""
+    url = f"{FIREBASE_BASE}/venues/{venue_id}.json"
+    try:
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            if data and isinstance(data, dict):
+                # If isPro is True, return True. Otherwise return False.
+                return data.get('isPro', False)
+    except Exception: 
+        pass 
+    return False # If it fails or they aren't pro, default to locked
             st.markdown("<h3 style='color:gray;text-align:center;margin-top:200px;'>Manual Mode Active<br><span style='font-size: 0.6em; font-weight: normal;'>Use the sidebar to generate a poster.</span></h3>", unsafe_allow_html=True)
