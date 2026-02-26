@@ -65,9 +65,17 @@ if not current_venue_id or not current_display_id:
     code = st.session_state.pair_code
     formatted_code = f"{code[:3]} {code[3:]}"
     
-    st.markdown(f"<h3 style='text-align: center; color: #7C3AED; margin-top: 15vh; font-family: sans-serif; letter-spacing: 4px;'>LINK YOUR DISPLAY</h3>", unsafe_allow_html=True)
-    st.markdown(f"<h1 style='text-align: center; font-size: 8rem; color: white; margin-top: -20px;'>{formatted_code}</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: gray; font-size: 1.5rem;'>Enter this code in the Jukebox Funk app.</p>", unsafe_allow_html=True)
+    # PREMIUM SOUNDSCREEN BRANDING
+    st.markdown("""
+        <div style='text-align: center; margin-top: 12vh;'>
+            <h1 style='color: #FFFFFF; font-size: 3.5rem; font-weight: 900; letter-spacing: 2px; margin-bottom: 0px;'>SOUND<span style='color: #7C3AED;'>SCREEN</span></h1>
+            <p style='color: #888888; font-size: 1rem; font-weight: 800; letter-spacing: 4px; margin-top: -15px;'>THE LIVE MUSIC POSTER</p>
+            <h3 style='color: #7C3AED; margin-top: 8vh; font-family: sans-serif; letter-spacing: 4px; font-size: 1.2rem;'>LINK YOUR DISPLAY</h3>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown(f"<h1 style='text-align: center; font-size: 9rem; color: white; margin-top: -30px; font-weight: bold; letter-spacing: 8px;'>{formatted_code}</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: gray; font-size: 1.5rem;'>Enter this code in the SoundScreen control app.</p>", unsafe_allow_html=True)
     
     time.sleep(2)
     linked_venue = check_pairing_status(code)
