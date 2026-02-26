@@ -176,6 +176,13 @@ else:
                     st.toast("Unpaired from Remote App.", icon="🔌")
                     st.rerun()
 
+                # 🛑 THE NEW AUTO-LOCK CHECK 🛑
+                if not check_subscription_status(current_venue_id):
+                    st.rerun() # This forces the entire TV to reload and hit the lock screen!
+
+                track_found, artist_found = get_current_song_from_cloud(current_venue_id)
+                # ... the rest of the existing code stays exactly the same
+
                 track_found, artist_found = get_current_song_from_cloud(current_venue_id)
                 if track_found and artist_found:
                     st.session_state.last_heard_time = time.time() 
