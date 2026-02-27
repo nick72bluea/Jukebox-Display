@@ -157,10 +157,31 @@ else:
 
         st.sidebar.markdown("---")
         st.sidebar.markdown("### 🎸 Manual Search")
-        st.sidebar.text_input("Artist Name", placeholder="e.g., Oasis", value="Oasis", key="manual_artist")
-        st.sidebar.text_input("Album Name", placeholder="e.g., Definitely Maybe", value="Definitely Maybe", key="manual_album")
+        
+        # Pick a random placeholder pair once per session so it doesn't flicker
+        if 'hint_artist' not in st.session_state:
+            hints = [
+                ("Fleetwood Mac", "Rumours"),
+                ("Daft Punk", "Random Access Memories"),
+                ("Arctic Monkeys", "AM"),
+                ("Nirvana", "Nevermind"),
+                ("The Beatles", "Abbey Road"),
+                ("Oasis", "Definitely Maybe")
+            ]
+            choice = random.choice(hints)
+            st.session_state.hint_artist = choice[0]
+            st.session_state.hint_album = choice[1]
+
+        # value="" ensures the box starts completely empty!
+        st.sidebar.text_input("Artist Name", placeholder=f"e.g., {st.session_state.hint_artist}", value="", key="manual_artist")
+        st.sidebar.text_input("Album Name", placeholder=f"e.g., {st.session_state.hint_album}", value="", key="manual_album")
 
         def generate_manual_poster():
+            # Add a quick safety check so they don't push empty posters!
+            if not st.session_state.manual_album or not st.session_state.manual_artist:
+                st.toast("Please enter an Artist and Album first!", icon="⚠️")
+                return
+                
             result_img = create_poster(st.session_state.manual_album, st.session_state.manual_artist, st.session_state.display_layout)
             if result_img:
                 st.session_state.current_poster = result_img
@@ -170,6 +191,8 @@ else:
                 st.query_params["mode"] = "manual"
                 if current_venue_id:
                     log_manual_history(current_venue_id, st.session_state.manual_album, st.session_state.manual_artist)
+
+        st.sidebar.button("Generate Layout", type="primary", on_click=generate_manual_poster)
 
         st.sidebar.button("Generate Layout", type="primary", on_click=generate_manual_poster)
         
