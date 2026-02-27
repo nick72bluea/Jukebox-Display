@@ -86,7 +86,7 @@ if not current_venue_id or not current_display_id:
     st.rerun() 
 
 else:
-    # 🛑 THE NEW SUBSCRIPTION CHECK 🛑
+    # 🛑 THE SUBSCRIPTION CHECK 🛑
     is_pro = check_subscription_status(current_venue_id)
     
     if not is_pro:
@@ -114,8 +114,8 @@ else:
 
     else:
         # ✅ THEY ARE PRO! RUN THE NORMAL TV APP ✅
-        # --- NEW STATE MEMORY ---
-        # Check the URL to see if they were in auto or manual last time (default to auto!)
+        
+        # --- NEW STATE MEMORY (SURVIVES REFRESH) ---
         saved_mode = st.query_params.get("mode", "auto")
         
         if 'live_mode_toggle' not in st.session_state: 
@@ -138,21 +138,6 @@ else:
             st.session_state.prev_live_mode = live_mode
             # Save the new choice into the URL so it survives a refresh!
             st.query_params["mode"] = "auto" if live_mode else "manual"
-            st.rerun()
-
-        st.sidebar.markdown("## ⚙️ TV Settings")
-        display_orientation = st.sidebar.radio("Display Layout", ["Portrait", "Landscape"], index=1, key="display_layout")
-        st.sidebar.markdown("---")
-        weather_city = st.sidebar.text_input("Local City for Weather", value="London")
-        idle_timeout_mins = st.sidebar.slider("Minutes until Standby Screen", min_value=1, max_value=15, value=5)
-
-        if 'last_orientation' not in st.session_state: st.session_state.last_orientation = display_orientation
-
-        st.sidebar.markdown("---")
-        live_mode = st.sidebar.toggle("📺 **CONNECT TO CLOUD REMOTE**", key="live_mode_toggle")
-
-        if live_mode != st.session_state.prev_live_mode:
-            st.session_state.prev_live_mode = live_mode
             st.rerun() 
 
         st.sidebar.markdown("---")
@@ -167,6 +152,8 @@ else:
                 st.session_state.is_standby = False
                 st.session_state.live_mode_toggle = False
                 st.session_state.prev_live_mode = False
+                # If they do a manual search, force the URL into manual mode so it stays put!
+                st.query_params["mode"] = "manual"
                 if current_venue_id:
                     log_manual_history(current_venue_id, st.session_state.manual_album, st.session_state.manual_artist)
 
@@ -201,10 +188,7 @@ else:
 
                 # 🛑 THE NEW AUTO-LOCK CHECK 🛑
                 if not check_subscription_status(current_venue_id):
-                    st.rerun() # This forces the entire TV to reload and hit the lock screen!
-
-                track_found, artist_found = get_current_song_from_cloud(current_venue_id)
-                # ... the rest of the existing code stays exactly the same
+                    st.rerun() # Forces TV to reload and hit the lock screen!
 
                 track_found, artist_found = get_current_song_from_cloud(current_venue_id)
                 if track_found and artist_found:
