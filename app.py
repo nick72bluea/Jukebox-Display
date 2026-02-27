@@ -117,20 +117,18 @@ else:
         
         # --- NEW STATE MEMORY (SURVIVES REFRESH) ---
         saved_mode = st.query_params.get("mode", "auto")
-        saved_layout = st.query_params.get("layout", "Landscape") # Read layout from URL, default to Landscape
+        saved_layout = st.query_params.get("layout", "Landscape")
         
         if 'live_mode_toggle' not in st.session_state: 
             st.session_state.live_mode_toggle = (saved_mode == "auto")
         if 'prev_live_mode' not in st.session_state: 
             st.session_state.prev_live_mode = st.session_state.live_mode_toggle
 
-        # Callback to update URL immediately when they click the radio button
         def update_layout_url():
             st.query_params["layout"] = st.session_state.display_layout
 
         st.sidebar.markdown("## ⚙️ TV Settings")
         
-        # Set the starting index based on what is in the URL (0 for Portrait, 1 for Landscape)
         layout_idx = 0 if saved_layout == "Portrait" else 1
         
         display_orientation = st.sidebar.radio(
@@ -138,7 +136,7 @@ else:
             ["Portrait", "Landscape"], 
             index=layout_idx, 
             key="display_layout",
-            on_change=update_layout_url # Triggers URL save automatically!
+            on_change=update_layout_url
         )
         
         st.sidebar.markdown("---")
@@ -158,7 +156,7 @@ else:
         st.sidebar.markdown("---")
         st.sidebar.markdown("### 🎸 Manual Search")
         
-        # Pick a random placeholder pair once per session so it doesn't flicker
+        # --- RANDOM HINT GENERATOR ---
         if 'hint_artist' not in st.session_state:
             hints = [
                 ("Fleetwood Mac", "Rumours"),
@@ -177,7 +175,7 @@ else:
         st.sidebar.text_input("Album Name", placeholder=f"e.g., {st.session_state.hint_album}", value="", key="manual_album")
 
         def generate_manual_poster():
-            # Add a quick safety check so they don't push empty posters!
+            # Safety check: don't push empty queries!
             if not st.session_state.manual_album or not st.session_state.manual_artist:
                 st.toast("Please enter an Artist and Album first!", icon="⚠️")
                 return
@@ -191,8 +189,6 @@ else:
                 st.query_params["mode"] = "manual"
                 if current_venue_id:
                     log_manual_history(current_venue_id, st.session_state.manual_album, st.session_state.manual_artist)
-
-        st.sidebar.button("Generate Layout", type="primary", on_click=generate_manual_poster)
 
         st.sidebar.button("Generate Layout", type="primary", on_click=generate_manual_poster)
         
