@@ -117,14 +117,30 @@ else:
         
         # --- NEW STATE MEMORY (SURVIVES REFRESH) ---
         saved_mode = st.query_params.get("mode", "auto")
+        saved_layout = st.query_params.get("layout", "Landscape") # Read layout from URL, default to Landscape
         
         if 'live_mode_toggle' not in st.session_state: 
             st.session_state.live_mode_toggle = (saved_mode == "auto")
         if 'prev_live_mode' not in st.session_state: 
             st.session_state.prev_live_mode = st.session_state.live_mode_toggle
 
+        # Callback to update URL immediately when they click the radio button
+        def update_layout_url():
+            st.query_params["layout"] = st.session_state.display_layout
+
         st.sidebar.markdown("## ⚙️ TV Settings")
-        display_orientation = st.sidebar.radio("Display Layout", ["Portrait", "Landscape"], index=1, key="display_layout")
+        
+        # Set the starting index based on what is in the URL (0 for Portrait, 1 for Landscape)
+        layout_idx = 0 if saved_layout == "Portrait" else 1
+        
+        display_orientation = st.sidebar.radio(
+            "Display Layout", 
+            ["Portrait", "Landscape"], 
+            index=layout_idx, 
+            key="display_layout",
+            on_change=update_layout_url # Triggers URL save automatically!
+        )
+        
         st.sidebar.markdown("---")
         weather_city = st.sidebar.text_input("Local City for Weather", value="London")
         idle_timeout_mins = st.sidebar.slider("Minutes until Standby Screen", min_value=1, max_value=15, value=5)
@@ -136,7 +152,6 @@ else:
 
         if live_mode != st.session_state.prev_live_mode:
             st.session_state.prev_live_mode = live_mode
-            # Save the new choice into the URL so it survives a refresh!
             st.query_params["mode"] = "auto" if live_mode else "manual"
             st.rerun() 
 
@@ -152,7 +167,6 @@ else:
                 st.session_state.is_standby = False
                 st.session_state.live_mode_toggle = False
                 st.session_state.prev_live_mode = False
-                # If they do a manual search, force the URL into manual mode so it stays put!
                 st.query_params["mode"] = "manual"
                 if current_venue_id:
                     log_manual_history(current_venue_id, st.session_state.manual_album, st.session_state.manual_artist)
@@ -186,9 +200,9 @@ else:
                     st.toast("Unpaired from Remote App.", icon="🔌")
                     st.rerun()
 
-                # 🛑 THE NEW AUTO-LOCK CHECK 🛑
+                # 🛑 THE AUTO-LOCK CHECK 🛑
                 if not check_subscription_status(current_venue_id):
-                    st.rerun() # Forces TV to reload and hit the lock screen!
+                    st.rerun()
 
                 track_found, artist_found = get_current_song_from_cloud(current_venue_id)
                 if track_found and artist_found:
