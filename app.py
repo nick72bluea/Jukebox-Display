@@ -114,8 +114,31 @@ else:
 
     else:
         # ✅ THEY ARE PRO! RUN THE NORMAL TV APP ✅
-        if 'live_mode_toggle' not in st.session_state: st.session_state.live_mode_toggle = False
-        if 'prev_live_mode' not in st.session_state: st.session_state.prev_live_mode = False
+        # --- NEW STATE MEMORY ---
+        # Check the URL to see if they were in auto or manual last time (default to auto!)
+        saved_mode = st.query_params.get("mode", "auto")
+        
+        if 'live_mode_toggle' not in st.session_state: 
+            st.session_state.live_mode_toggle = (saved_mode == "auto")
+        if 'prev_live_mode' not in st.session_state: 
+            st.session_state.prev_live_mode = st.session_state.live_mode_toggle
+
+        st.sidebar.markdown("## ⚙️ TV Settings")
+        display_orientation = st.sidebar.radio("Display Layout", ["Portrait", "Landscape"], index=1, key="display_layout")
+        st.sidebar.markdown("---")
+        weather_city = st.sidebar.text_input("Local City for Weather", value="London")
+        idle_timeout_mins = st.sidebar.slider("Minutes until Standby Screen", min_value=1, max_value=15, value=5)
+
+        if 'last_orientation' not in st.session_state: st.session_state.last_orientation = display_orientation
+
+        st.sidebar.markdown("---")
+        live_mode = st.sidebar.toggle("📺 **CONNECT TO CLOUD REMOTE**", key="live_mode_toggle")
+
+        if live_mode != st.session_state.prev_live_mode:
+            st.session_state.prev_live_mode = live_mode
+            # Save the new choice into the URL so it survives a refresh!
+            st.query_params["mode"] = "auto" if live_mode else "manual"
+            st.rerun()
 
         st.sidebar.markdown("## ⚙️ TV Settings")
         display_orientation = st.sidebar.radio("Display Layout", ["Portrait", "Landscape"], index=1, key="display_layout")
