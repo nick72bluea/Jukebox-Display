@@ -105,7 +105,6 @@ def create_poster(album_name, artist_name, orientation="Portrait"):
     else: spotify_code_img = Image.new('RGBA', (640, 160), (255, 255, 255, 0))
 
     def get_safe_font(size):
-        # We try Arial Narrow first, then fallback gracefully.
         font_paths = [
             "/System/Library/Fonts/Supplemental/Arial Narrow Bold.ttf", 
             "/System/Library/Fonts/Supplemental/Arial Bold.ttf", 
@@ -122,7 +121,11 @@ def create_poster(album_name, artist_name, orientation="Portrait"):
         poster_w, poster_h, padding = 1200, 1800, 70
         cover_size = poster_w - (padding * 2)
         
-        bg_img = cover_img.resize((poster_w, poster_h)).filter(ImageFilter.GaussianBlur(radius=40))
+        # ⚡️ SPEED OPTIMIZATION: Shrink -> Blur -> Stretch ⚡️
+        tiny_bg = cover_img.resize((poster_w // 4, poster_h // 4))
+        tiny_bg = tiny_bg.filter(ImageFilter.GaussianBlur(radius=10))
+        bg_img = tiny_bg.resize((poster_w, poster_h), resample=Image.Resampling.BICUBIC)
+        
         poster = Image.alpha_composite(bg_img, Image.new('RGBA', bg_img.size, (0, 0, 0, 130)))
         draw = ImageDraw.Draw(poster)
         
@@ -140,24 +143,20 @@ def create_poster(album_name, artist_name, orientation="Portrait"):
         new_y_after_artist = draw_wrapped_text(draw, artist_name.upper(), get_safe_font(artist_size), max_text_width, poster_w - padding, code_y - 12, "white", "right")
         new_y_after_title = draw_wrapped_text(draw, clean_name.upper(), get_safe_font(title_size), max_text_width, poster_w - padding, new_y_after_artist + 5, "white", "right")
 
-        # --- DYNAMIC TRACK SPACING FIX ---
         track_y_start = new_y_after_title + 60 
         meta_y, bar_y = poster_h - padding - 45, poster_h - padding + 5
         
         available_space = meta_y - track_y_start - 30
         track_lines = max(1, (len(display_tracks) + 1) // 2)
         
-        # Calculate optimal spacing, but enforce a minimum so text NEVER overlaps
         optimal_spacing = available_space // track_lines if track_lines > 0 else 50
         track_spacing = min(40, optimal_spacing)
         
-        # If tracks are squishing too hard (less than 35px), we trim the tracklist for a clean aesthetic
         if track_spacing < 35:
-            display_tracks = display_tracks[:18]  # Limit to 18 tracks to keep it legible
+            display_tracks = display_tracks[:18]
             track_lines = max(1, (len(display_tracks) + 1) // 2)
             track_spacing = min(50, available_space // track_lines) if track_lines > 0 else 50
 
-        # Restore the middle gap and significantly reduce the font size
         max_col_width = (poster_w - (padding * 2)) // 2 - 20 
         font_tracks = get_safe_font(22)
 
@@ -170,7 +169,6 @@ def create_poster(album_name, artist_name, orientation="Portrait"):
             text = truncate_text(f"{track} .{mid_point+i+1}", font_tracks, max_col_width)
             draw.text((poster_w - padding, track_y_start + (i * track_spacing)), text, font=font_tracks, fill="white", anchor="ra")
 
-        # Give the meta text slightly larger fonts to match your reference image
         draw.text((padding, meta_y), f"RELEASE DATE: {release_date}", font=get_safe_font(22), fill="#e0e0e0")
         draw.text((poster_w - padding, meta_y), f"ALBUM DURATION: {duration_str}", font=get_safe_font(22), fill="#e0e0e0", anchor="ra")
 
@@ -184,7 +182,11 @@ def create_poster(album_name, artist_name, orientation="Portrait"):
         poster_w, poster_h, padding = 1920, 1080, 80
         cover_size = 800 
         
-        bg_img = cover_img.resize((poster_w, poster_h)).filter(ImageFilter.GaussianBlur(radius=50))
+        # ⚡️ SPEED OPTIMIZATION: Shrink -> Blur -> Stretch ⚡️
+        tiny_bg = cover_img.resize((poster_w // 4, poster_h // 4))
+        tiny_bg = tiny_bg.filter(ImageFilter.GaussianBlur(radius=12))
+        bg_img = tiny_bg.resize((poster_w, poster_h), resample=Image.Resampling.BICUBIC)
+        
         poster = Image.alpha_composite(bg_img, Image.new('RGBA', bg_img.size, (0, 0, 0, 160))) 
         draw = ImageDraw.Draw(poster)
         
@@ -206,12 +208,11 @@ def create_poster(album_name, artist_name, orientation="Portrait"):
 
         track_y_start = new_y_after_title + 70 
         
-        # --- REDUCED TEXT SIZE & TIGHTER SPACING FOR LANDSCAPE ---
-        font_tracks = get_safe_font(24) # Shrunk from 34 to 24
+        font_tracks = get_safe_font(24) 
         meta_y = poster_h - padding - 45
         
         if len(display_tracks) <= 11:
-            track_spacing = 40 # Tightened from 45
+            track_spacing = 40 
             max_track_width = right_edge_x - text_start_x
             for i, track in enumerate(display_tracks):
                 text = truncate_text(f"{track} .{i+1}", font_tracks, max_track_width)
@@ -221,15 +222,13 @@ def create_poster(album_name, artist_name, orientation="Portrait"):
             
             available_space = meta_y - track_y_start - 20
             optimal_spacing = available_space // mid_point if mid_point > 0 else 40
-            track_spacing = min(40, optimal_spacing) # Tightened from 45
+            track_spacing = min(40, optimal_spacing) 
             
-            # Anti-squish logic for Landscape
             if track_spacing < 30:
                 display_tracks = display_tracks[:18]
                 mid_point = (len(display_tracks) + 1) // 2
                 track_spacing = min(40, available_space // mid_point) if mid_point > 0 else 40
                 
-            # Keep a nice clean gutter in the middle of the columns
             max_col_width = (right_edge_x - text_start_x) // 2 - 30 
             
             for i, track in enumerate(display_tracks[:mid_point]):
