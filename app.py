@@ -224,12 +224,10 @@ else:
             st.session_state.hint_artist = choice[0]
             st.session_state.hint_album = choice[1]
 
-        # value="" ensures the box starts completely empty!
         st.sidebar.text_input("Artist Name", placeholder=f"e.g., {st.session_state.hint_artist}", value="", key="manual_artist")
         st.sidebar.text_input("Album Name", placeholder=f"e.g., {st.session_state.hint_album}", value="", key="manual_album")
 
         def generate_manual_poster():
-            # Safety check: don't push empty queries!
             if not st.session_state.manual_album or not st.session_state.manual_artist:
                 st.toast("Please enter an Artist and Album first!", icon="⚠️")
                 return
@@ -260,11 +258,13 @@ else:
             if st.session_state.is_standby:
                 draw_weather_dashboard(weather_city)
             elif st.session_state.current_poster:
-                st.image(st.session_state.current_poster, use_container_width=True)
+                # ⚡️ THE JPEG SPEED FIX ⚡️
+                st.image(st.session_state.current_poster.convert('RGB'), use_container_width=True, output_format="JPEG")
             else:
                 st.markdown(f"<h3 style='color:gray;text-align:center;margin-top:200px;'>Listening to Venue Cloud...<br><span style='font-size:12px;opacity:0.5;'>Venue: {current_venue_id}<br>Display: {current_display_id}</span></h3>", unsafe_allow_html=True)
 
-            @st.fragment(run_every=3)
+            # ⚡️ THE 1-SECOND HEARTBEAT FIX ⚡️
+            @st.fragment(run_every=1)
             def background_listener():
                 needs_rerun = False
                 
@@ -273,7 +273,6 @@ else:
                     st.toast("Unpaired from Remote App.", icon="🔌")
                     st.rerun()
 
-                # 🛑 THE AUTO-LOCK CHECK 🛑
                 if not check_subscription_status(current_venue_id):
                     st.rerun()
 
@@ -319,6 +318,7 @@ else:
 
         else:
             if st.session_state.current_poster:
-                st.image(st.session_state.current_poster, use_container_width=True)
+                # ⚡️ THE JPEG SPEED FIX (Manual Mode) ⚡️
+                st.image(st.session_state.current_poster.convert('RGB'), use_container_width=True, output_format="JPEG")
             else:
                 st.markdown("<h3 style='color:gray;text-align:center;margin-top:200px;'>Waiting for Manual Push...</h3>", unsafe_allow_html=True)
