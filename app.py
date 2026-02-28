@@ -17,26 +17,32 @@ st.set_page_config(page_title="SoundScreen TV", layout="wide", initial_sidebar_s
 
 hide_st_style = """
             <style>
-            /* Hide top header and default menus */
-            #MainMenu {visibility: hidden;}
-            footer {visibility: hidden;}
-            header[data-testid="stHeader"] { background: rgba(0,0,0,0) !important; }
+            /* Hide the right-side Streamlit menu, but keep the top header structure */
             [data-testid="stToolbar"] { visibility: hidden !important; }
+            footer {visibility: hidden;}
+            header[data-testid="stHeader"] { background: rgba(0,0,0,0) !important; box-shadow: none !important; }
             
-            /* Set pure black background */
-            .stApp { background-color: #000000 !important; }
+            /* Bring back JUST the sidebar toggle arrow, make it subtle */
+            [data-testid="collapsedControl"] {
+                display: flex !important;
+                visibility: visible !important;
+                background-color: rgba(255, 255, 255, 0.1) !important;
+                border-radius: 8px !important;
+                margin-top: 10px !important;
+                margin-left: 10px !important;
+            }
+
+            /* Pure black background everywhere */
+            .stApp, .main { background-color: #000000 !important; }
             
-            /* KILL ALL DEFAULT STREAMLIT PADDING */
+            /* NUKE ALL STREAMLIT PADDING */
             .block-container {
-                padding-top: 0rem !important;
-                padding-bottom: 0rem !important;
-                padding-left: 0rem !important;
-                padding-right: 0rem !important;
+                padding: 0px !important;
                 max-width: 100% !important;
-                margin: 0 !important;
+                margin: 0px !important;
             }
             
-            /* FORCE FULL SCREEN IMAGE (COVER) */
+            /* FORCE IMAGE TO 100% VIEWPORT */
             [data-testid="stImage"] {
                 width: 100vw !important;
                 height: 100vh !important;
@@ -45,11 +51,12 @@ hide_st_style = """
                 align-items: center;
                 margin: 0 !important;
                 padding: 0 !important;
+                background-color: #000000 !important; /* Blends any letterboxing */
             }
             [data-testid="stImage"] img {
-                object-fit: cover !important;
-                width: 100vw !important;
-                height: 100vh !important;
+                object-fit: contain !important; /* Keeps it from stretching weirdly */
+                width: 100% !important;
+                height: 100% !important;
             }
             </style>
             """
@@ -199,10 +206,12 @@ else:
             st.session_state.hint_artist = choice[0]
             st.session_state.hint_album = choice[1]
 
+        # value="" ensures the box starts completely empty!
         st.sidebar.text_input("Artist Name", placeholder=f"e.g., {st.session_state.hint_artist}", value="", key="manual_artist")
         st.sidebar.text_input("Album Name", placeholder=f"e.g., {st.session_state.hint_album}", value="", key="manual_album")
 
         def generate_manual_poster():
+            # Safety check: don't push empty queries!
             if not st.session_state.manual_album or not st.session_state.manual_artist:
                 st.toast("Please enter an Artist and Album first!", icon="⚠️")
                 return
