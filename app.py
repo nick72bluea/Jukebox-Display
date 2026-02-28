@@ -17,27 +17,39 @@ st.set_page_config(page_title="SoundScreen TV", layout="wide", initial_sidebar_s
 
 hide_st_style = """
             <style>
-            /* Hide the right-side Streamlit menu, but keep the top header structure */
+            /* Hide the right-side Streamlit menu */
             [data-testid="stToolbar"] { visibility: hidden !important; }
-            footer {visibility: hidden;}
-            header[data-testid="stHeader"] { background: rgba(0,0,0,0) !important; box-shadow: none !important; }
+            footer {visibility: hidden !important;}
             
-            /* Bring back JUST the sidebar toggle arrow, make it subtle */
+            /* CRITICAL FIX FOR THE 2% TOP GAP: Crush the header height */
+            header[data-testid="stHeader"] { 
+                background: rgba(0,0,0,0) !important; 
+                box-shadow: none !important; 
+                height: 0px !important;
+                min-height: 0px !important;
+                padding: 0px !important;
+            }
+            
+            /* Bring back JUST the sidebar toggle arrow */
             [data-testid="collapsedControl"] {
                 display: flex !important;
                 visibility: visible !important;
                 background-color: rgba(255, 255, 255, 0.1) !important;
                 border-radius: 8px !important;
-                margin-top: 10px !important;
-                margin-left: 10px !important;
+                margin-top: 15px !important;
+                margin-left: 15px !important;
+                z-index: 9999 !important; /* Ensure it stays clickable over the image */
             }
 
             /* Pure black background everywhere */
             .stApp, .main { background-color: #000000 !important; }
             
-            /* NUKE ALL STREAMLIT PADDING */
+            /* NUKE ALL STREAMLIT PADDING AND MARGINS */
             .block-container {
-                padding: 0px !important;
+                padding-top: 0px !important;
+                padding-bottom: 0px !important;
+                padding-left: 0px !important;
+                padding-right: 0px !important;
                 max-width: 100% !important;
                 margin: 0px !important;
             }
@@ -51,10 +63,10 @@ hide_st_style = """
                 align-items: center;
                 margin: 0 !important;
                 padding: 0 !important;
-                background-color: #000000 !important; /* Blends any letterboxing */
+                background-color: #000000 !important;
             }
             [data-testid="stImage"] img {
-                object-fit: contain !important; /* Keeps it from stretching weirdly */
+                object-fit: contain !important; 
                 width: 100% !important;
                 height: 100% !important;
             }
