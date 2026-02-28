@@ -17,20 +17,28 @@ st.set_page_config(page_title="SoundScreen TV", layout="wide", initial_sidebar_s
 
 hide_st_style = """
             <style>
-            /* Hide the right-side Streamlit menu */
+            /* KILL THE SCROLLBAR FOREVER */
+            html, body {
+                overflow: hidden !important; 
+                width: 100vw !important; 
+                height: 100vh !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+
+            /* Hide the right-side Streamlit menu and header entirely */
             [data-testid="stToolbar"] { visibility: hidden !important; }
             footer {visibility: hidden !important;}
-            
-            /* CRITICAL FIX FOR THE 2% TOP GAP: Crush the header height */
             header[data-testid="stHeader"] { 
                 background: rgba(0,0,0,0) !important; 
                 box-shadow: none !important; 
                 height: 0px !important;
                 min-height: 0px !important;
                 padding: 0px !important;
+                display: none !important; 
             }
             
-            /* Bring back JUST the sidebar toggle arrow */
+            /* Bring back JUST the sidebar toggle arrow OVER the image */
             [data-testid="collapsedControl"] {
                 display: flex !important;
                 visibility: visible !important;
@@ -38,32 +46,30 @@ hide_st_style = """
                 border-radius: 8px !important;
                 margin-top: 15px !important;
                 margin-left: 15px !important;
-                z-index: 9999 !important; /* Ensure it stays clickable over the image */
+                z-index: 9999 !important; /* Keeps it clickable */
             }
 
-            /* Pure black background everywhere */
             .stApp, .main { background-color: #000000 !important; }
             
             /* NUKE ALL STREAMLIT PADDING AND MARGINS */
             .block-container {
-                padding-top: 0px !important;
-                padding-bottom: 0px !important;
-                padding-left: 0px !important;
-                padding-right: 0px !important;
+                padding: 0px !important;
                 max-width: 100% !important;
                 margin: 0px !important;
             }
             
-            /* FORCE IMAGE TO 100% VIEWPORT */
+            /* THE NUCLEAR OPTION: Pin the image directly to the screen corners */
             [data-testid="stImage"] {
+                position: fixed !important;
+                top: 0px !important;
+                left: 0px !important;
                 width: 100vw !important;
                 height: 100vh !important;
                 display: flex;
                 justify-content: center;
                 align-items: center;
-                margin: 0 !important;
-                padding: 0 !important;
                 background-color: #000000 !important;
+                z-index: 1 !important;
             }
             [data-testid="stImage"] img {
                 object-fit: contain !important; 
