@@ -62,6 +62,7 @@ def truncate_text(text, font, max_width):
     return text.strip() + "..."
 
 # --- SPOTIFY HELPERS ---
+@st.cache_data(ttl=86400, show_spinner=False)
 def get_album_from_track(track_name, artist_name):
     sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(client_id=SPOTIPY_CLIENT_ID, client_secret=SPOTIPY_CLIENT_SECRET))
     results = sp.search(q=f"track:{track_name} artist:{artist_name}", type='track', limit=1)
@@ -71,6 +72,7 @@ def get_album_from_track(track_name, artist_name):
     return None
 
 # --- MAIN GENERATOR ---
+@st.cache_data(ttl=86400, show_spinner=False)
 def create_poster(album_name, artist_name, orientation="Portrait"):
     sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(client_id=SPOTIPY_CLIENT_ID, client_secret=SPOTIPY_CLIENT_SECRET))
     results = sp.search(q=f"album:{album_name} artist:{artist_name}", type='album', limit=1)
