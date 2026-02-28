@@ -17,11 +17,40 @@ st.set_page_config(page_title="SoundScreen TV", layout="wide", initial_sidebar_s
 
 hide_st_style = """
             <style>
+            /* Hide top header and default menus */
             #MainMenu {visibility: hidden;}
             footer {visibility: hidden;}
             header[data-testid="stHeader"] { background: rgba(0,0,0,0) !important; }
-            .stApp { background-color: #000000; }
-            [data-testid="stImage"] { display: flex; justify-content: center; align-items: center; }
+            [data-testid="stToolbar"] { visibility: hidden !important; }
+            
+            /* Set pure black background */
+            .stApp { background-color: #000000 !important; }
+            
+            /* KILL ALL DEFAULT STREAMLIT PADDING */
+            .block-container {
+                padding-top: 0rem !important;
+                padding-bottom: 0rem !important;
+                padding-left: 0rem !important;
+                padding-right: 0rem !important;
+                max-width: 100% !important;
+                margin: 0 !important;
+            }
+            
+            /* FORCE FULL SCREEN IMAGE (COVER) */
+            [data-testid="stImage"] {
+                width: 100vw !important;
+                height: 100vh !important;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+            [data-testid="stImage"] img {
+                object-fit: cover !important;
+                width: 100vw !important;
+                height: 100vh !important;
+            }
             </style>
             """
 st.markdown(hide_st_style, unsafe_allow_html=True)
@@ -170,12 +199,10 @@ else:
             st.session_state.hint_artist = choice[0]
             st.session_state.hint_album = choice[1]
 
-        # value="" ensures the box starts completely empty!
         st.sidebar.text_input("Artist Name", placeholder=f"e.g., {st.session_state.hint_artist}", value="", key="manual_artist")
         st.sidebar.text_input("Album Name", placeholder=f"e.g., {st.session_state.hint_album}", value="", key="manual_album")
 
         def generate_manual_poster():
-            # Safety check: don't push empty queries!
             if not st.session_state.manual_album or not st.session_state.manual_artist:
                 st.toast("Please enter an Artist and Album first!", icon="⚠️")
                 return
