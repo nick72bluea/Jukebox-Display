@@ -148,7 +148,6 @@ else:
 
         @st.fragment(run_every=1)
         def background_listener():
-           
             needs_rerun = False
             
             if check_if_unpaired(current_venue_id, current_display_id):
@@ -162,7 +161,7 @@ else:
             current_layout = get_display_layout(current_venue_id, current_display_id)
             
             # Sanitization fallback just in case
-            if current_layout not in ["Portrait", "Landscape"]:
+            if current_layout not in ["Landscape", "Portrait", "Portrait (Sideways TV)"]:
                 current_layout = "Landscape"
 
             track_found, artist_found = get_current_song_from_cloud(current_venue_id)
