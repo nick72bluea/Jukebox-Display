@@ -68,9 +68,9 @@ def get_album_from_track(track_name, artist_name):
     if fallback['tracks']['items']: return fallback['tracks']['items'][0]['album']['name']
     return None
 
-# --- MAIN GENERATOR ---
+# ⚡️ STAGE 1 CACHE: Fetching the raw assets from Spotify ONLY ONCE ⚡️
 @st.cache_data(ttl=86400, show_spinner=False)
-def create_poster(album_name, artist_name, orientation="Portrait"):
+def fetch_spotify_assets(album_name, artist_name):
     sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(client_id=SPOTIPY_CLIENT_ID, client_secret=SPOTIPY_CLIENT_SECRET))
     results = sp.search(q=f"album:{album_name} artist:{artist_name}", type='album', limit=1)
     if not results['albums']['items']: 
@@ -95,13 +95,40 @@ def create_poster(album_name, artist_name, orientation="Portrait"):
     duration_str = f"{total_ms // 60000}:{(total_ms % 60000) // 1000:02d}"
 
     headers = {'User-Agent': 'Mozilla/5.0'}
-    cover_img = Image.open(BytesIO(requests.get(cover_url, headers=headers).content)).convert("RGBA")
+    cover_bytes = requests.get(cover_url, headers=headers).content
     
     code_response = requests.get(f"https://scannables.scdn.co/uri/plain/png/000000/white/640/{uri}")
-    if code_response.status_code == 200:
-        spotify_code_img = Image.open(BytesIO(code_response.content)).convert("RGBA")
+    code_bytes = code_response.content if code_response.status_code == 200 else None
+
+    # Return pure data and raw image bytes so Streamlit can cache it perfectly
+    return {
+        "clean_name": clean_name,
+        "release_date": release_date,
+        "display_tracks": display_tracks,
+        "duration_str": duration_str,
+        "cover_bytes": cover_bytes,
+        "code_bytes": code_bytes
+    }
+
+# ⚡️ STAGE 2 CACHE: Generating the actual layout per orientation ⚡️
+@st.cache_data(ttl=86400, show_spinner=False)
+def create_poster(album_name, artist_name, orientation="Portrait"):
+    assets = fetch_spotify_assets(album_name, artist_name)
+    if not assets: return None
+    
+    clean_name = assets["clean_name"]
+    release_date = assets["release_date"]
+    display_tracks = assets["display_tracks"]
+    duration_str = assets["duration_str"]
+
+    # Rebuild images from cached bytes
+    cover_img = Image.open(BytesIO(assets["cover_bytes"])).convert("RGBA")
+    
+    if assets["code_bytes"]:
+        spotify_code_img = Image.open(BytesIO(assets["code_bytes"])).convert("RGBA")
         spotify_code_img.putdata([(255, 255, 255, int(sum(item[:3]) / 3)) for item in spotify_code_img.getdata()])
-    else: spotify_code_img = Image.new('RGBA', (640, 160), (255, 255, 255, 0))
+    else: 
+        spotify_code_img = Image.new('RGBA', (640, 160), (255, 255, 255, 0))
 
     def get_safe_font(size):
         font_paths = [
@@ -117,7 +144,6 @@ def create_poster(album_name, artist_name, orientation="Portrait"):
         return ImageFont.load_default()
 
     if orientation in ["Portrait", "Portrait (Sideways TV)"]:
-        # --- TRUE 1080x1920 PIXEL MATH ---
         poster_w, poster_h, padding = 1080, 1920, 90 
         cover_size = poster_w - (padding * 2)
         
@@ -176,7 +202,6 @@ def create_poster(album_name, artist_name, orientation="Portrait"):
             color = cover_img.crop((i * (cover_img.width // 4), 0, (i + 1) * (cover_img.width // 4), cover_img.height)).resize((1, 1), resample=Image.Resampling.LANCZOS).getpixel((0, 0))
             draw.rectangle([padding + (i * segment_w), bar_y, padding + ((i + 1) * segment_w), bar_y + 20], fill=color)
 
-        # ⚡️ FIXED: Rotates 270 degrees (or -90) instead of 90 to match your TV mount! ⚡️
         if orientation == "Portrait (Sideways TV)":
             poster = poster.rotate(270, expand=True)
 
