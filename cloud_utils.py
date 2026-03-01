@@ -82,11 +82,14 @@ def check_subscription_status(venue_id):
     return False
 
 def get_display_layout(venue_id, display_id):
-    """Fetches the specific layout preference for a single display."""
+    """Fetches the specific layout preference for a single display via REST API."""
+    url = f"{FIREBASE_BASE}/venues/{venue_id}/displays/{display_id}/layout.json"
     try:
-        ref = db.reference(f'venues/{venue_id}/displays/{display_id}/layout')
-        val = ref.get()
-        return val if val else "Landscape" # Default to Landscape if none is set
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200:
+            val = response.json()
+            if val and isinstance(val, str):
+                return val.strip()
     except Exception as e:
         print(f"Error fetching display layout: {e}")
-        return "Landscape"
+    return "Landscape" # Default to Landscape if none is set or an error occurs
