@@ -137,9 +137,11 @@ else:
     else:
         # ✅ DUMB GLASS MODE ✅
         weather_city = "London"
+        # ⚡️ TEMPORARILY DROPPED TO 1 MINUTE FOR TESTING ⚡️
         idle_timeout_mins = 1
 
         if st.session_state.is_standby:
+            # Passes the specific display's layout to the weather widget
             draw_weather_dashboard(weather_city, st.session_state.last_orientation)
         elif st.session_state.current_poster:
             st.image(st.session_state.current_poster.convert('RGB'), use_container_width=True, output_format="JPEG")
