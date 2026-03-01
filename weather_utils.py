@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import requests
 from datetime import datetime
 
@@ -30,7 +31,7 @@ def get_weather(city):
 def draw_weather_dashboard(city="London", layout="Landscape"):
     now = datetime.now()
     
-    # 1. Bring back the Python time so the screen instantly has a clock on load!
+    # Initial load time so it's never blank
     time_str = now.strftime("%H:%M")
     date_str = now.strftime("%A, %B %d").upper()
     
@@ -49,8 +50,7 @@ def draw_weather_dashboard(city="London", layout="Landscape"):
         wrapper_style = "position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: #000000; color: white; font-family: sans-serif; z-index: 10;"
         time_size, date_size, icon_size, temp_size, meta_size, brand_size = "12vw", "2vw", "4vw", "3vw", "1vw", "2vw"
 
-    # --- HTML INJECTION ---
-    # ZERO indentation allowed here to prevent Streamlit from creating code blocks
+    # --- 1. VISUAL HTML LAYER ---
     html = f"""<div style="{wrapper_style}">
 <div id="live-time" style="font-size: {time_size}; font-weight: 900; letter-spacing: -2px; margin-bottom: -2vh; line-height: 1;">{time_str}</div>
 <div style="font-size: {date_size}; color: #888888; letter-spacing: 4px; font-weight: 700; margin-bottom: 8vh;">{date_str}</div>
@@ -65,17 +65,29 @@ def draw_weather_dashboard(city="London", layout="Landscape"):
 <div style="font-size: {brand_size}; font-weight: 900; letter-spacing: 3px;">SOUND<span style="color: #7C3AED;">SCREEN</span></div>
 <div style="font-size: {meta_size}; color: #444444; letter-spacing: 4px; margin-top: 1vh; font-weight: 800;">LISTENING FOR MUSIC...</div>
 </div>
-</div>
-
-<img src="dummy" onerror="
-    setInterval(function() {{
-        const now = new Date();
-        const hours = String(now.getHours()).padStart(2, '0');
-        const minutes = String(now.getMinutes()).padStart(2, '0');
-        const el = document.getElementById('live-time');
-        if(el) el.innerText = hours + ':' + minutes;
-    }}, 1000);
-" style="display:none;">
-"""
+</div>"""
 
     st.markdown(html, unsafe_allow_html=True)
+
+    # --- 2. INVISIBLE JAVASCRIPT ENGINE ---
+    # We use components.html to build an invisible iframe that safely runs our Javascript 
+    # and reaches "up" into the parent window to update the clock.
+    ticker_js = """
+    <script>
+        function updateClock() {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            
+            // Reaching out of this invisible iframe into the main Streamlit page
+            const targetElement = window.parent.document.getElementById('live-time');
+            if (targetElement) {
+                targetElement.innerText = hours + ':' + minutes;
+            }
+        }
+        setInterval(updateClock, 1000);
+    </script>
+    """
+    
+    # Render the script block in a 0x0 hidden iframe
+    components.html(ticker_js, height=0, width=0)
