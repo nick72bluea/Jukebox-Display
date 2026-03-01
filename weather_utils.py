@@ -29,14 +29,15 @@ def get_weather(city):
 
 def draw_weather_dashboard(city="London", layout="Landscape"):
     now = datetime.now()
-    # Notice we removed the Python time_str here! We let JS handle it below.
+    
+    # 1. Bring back the Python time so the screen instantly has a clock on load!
+    time_str = now.strftime("%H:%M")
     date_str = now.strftime("%A, %B %d").upper()
     
     temp, desc, icon = get_weather(city)
     
     # --- SMART ROTATION CSS ---
     if layout == "Portrait (Sideways TV)":
-        # ⚡️ FIXED: Flipped from -90deg to 90deg so it matches the poster rotation perfectly! ⚡️
         wrapper_style = "position: fixed; top: 50%; left: 50%; width: 100vh; height: 100vw; transform: translate(-50%, -50%) rotate(90deg); display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: #000000; color: white; font-family: sans-serif; z-index: 10;"
         time_size, date_size, icon_size, temp_size, meta_size, brand_size = "18vw", "3vw", "6vw", "5vw", "1.5vw", "3vw"
     
@@ -51,7 +52,7 @@ def draw_weather_dashboard(city="London", layout="Landscape"):
     # --- HTML INJECTION ---
     # ZERO indentation allowed here to prevent Streamlit from creating code blocks
     html = f"""<div style="{wrapper_style}">
-<div id="live-time" style="font-size: {time_size}; font-weight: 900; letter-spacing: -2px; margin-bottom: -2vh; line-height: 1;"></div>
+<div id="live-time" style="font-size: {time_size}; font-weight: 900; letter-spacing: -2px; margin-bottom: -2vh; line-height: 1;">{time_str}</div>
 <div style="font-size: {date_size}; color: #888888; letter-spacing: 4px; font-weight: 700; margin-bottom: 8vh;">{date_str}</div>
 <div style="display: flex; align-items: center; gap: 2vw; background-color: #0A0A0A; padding: 3vh 4vw; border-radius: 2vw; border: 2px solid #1A1A1A;">
 <div style="font-size: {icon_size};">{icon}</div>
@@ -65,15 +66,16 @@ def draw_weather_dashboard(city="London", layout="Landscape"):
 <div style="font-size: {meta_size}; color: #444444; letter-spacing: 4px; margin-top: 1vh; font-weight: 800;">LISTENING FOR MUSIC...</div>
 </div>
 </div>
-<script>
-    function updateTime() {{
+
+<img src="dummy" onerror="
+    setInterval(function() {{
         const now = new Date();
         const hours = String(now.getHours()).padStart(2, '0');
         const minutes = String(now.getMinutes()).padStart(2, '0');
-        document.getElementById('live-time').innerText = hours + ':' + minutes;
-    }}
-    setInterval(updateTime, 1000);
-    updateTime();
-</script>"""
+        const el = document.getElementById('live-time');
+        if(el) el.innerText = hours + ':' + minutes;
+    }}, 1000);
+" style="display:none;">
+"""
 
     st.markdown(html, unsafe_allow_html=True)
