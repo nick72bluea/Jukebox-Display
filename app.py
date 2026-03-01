@@ -140,7 +140,7 @@ else:
         idle_timeout_mins = 5
 
         if st.session_state.is_standby:
-            draw_weather_dashboard(weather_city)
+            draw_weather_dashboard(weather_city, st.session_state.last_orientation)
         elif st.session_state.current_poster:
             st.image(st.session_state.current_poster.convert('RGB'), use_container_width=True, output_format="JPEG")
         else:
