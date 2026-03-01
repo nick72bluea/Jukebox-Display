@@ -93,3 +93,18 @@ def get_display_layout(venue_id, display_id):
     except Exception as e:
         print(f"Error fetching display layout: {e}")
     return "Landscape" # Default to Landscape if none is set or an error occurs
+
+def get_venue_settings(venue_id):
+    """Fetches the global venue settings for weather and standby timeout."""
+    url = f"{FIREBASE_BASE}/venues/{venue_id}/settings.json"
+    try:
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            if data and isinstance(data, dict):
+                city = data.get("city", "London")
+                timeout = int(data.get("timeout", 5))
+                return city.strip(), timeout
+    except Exception as e:
+        pass
+    return "London", 5 # Rock solid defaults just in case
