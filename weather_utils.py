@@ -2,39 +2,84 @@ import streamlit as st
 import requests
 from datetime import datetime
 
-def get_weather(city_name):
+# --- FREE & FAST WEATHER CACHE ---
+# We cache this for 30 mins so we don't spam the weather API and slow down the TV
+@st.cache_data(ttl=1800, show_spinner=False) 
+def get_weather(city):
     try:
-        geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={city_name}&count=1&format=json"
-        geo_data = requests.get(geo_url).json()
-        if not geo_data.get('results'): return None
-        lat, lon, resolved_name = geo_data['results'][0]['latitude'], geo_data['results'][0]['longitude'], geo_data['results'][0]['name']
+        # Using wttr.in as it is a highly reliable, free, keyless API
+        res = requests.get(f"https://wttr.in/{city}?format=j1", timeout=3)
+        data = res.json()
+        temp = data['current_condition'][0]['temp_C']
+        desc = data['current_condition'][0]['weatherDesc'][0]['value']
         
-        weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,weather_code&timezone=auto"
-        weather_data = requests.get(weather_url).json()
-        temp, code = weather_data['current']['temperature_2m'], weather_data['current']['weather_code']
+        # Smart Emoji Mapper
+        desc_lower = desc.lower()
+        if "sun" in desc_lower or "clear" in desc_lower: icon = "☀️"
+        elif "rain" in desc_lower or "drizzle" in desc_lower or "shower" in desc_lower: icon = "🌧️"
+        elif "cloud" in desc_lower or "overcast" in desc_lower: icon = "☁️"
+        elif "snow" in desc_lower or "ice" in desc_lower: icon = "❄️"
+        elif "thunder" in desc_lower or "storm" in desc_lower: icon = "⛈️"
+        else: icon = "🌡️"
         
-        emoji, condition = "☀️", "Clear"
-        if code in [1, 2, 3]: emoji, condition = "⛅️", "Partly Cloudy"
-        elif code in [45, 48]: emoji, condition = "🌫️", "Fog"
-        elif code in [51, 53, 55, 56, 57]: emoji, condition = "🌧️", "Drizzle"
-        elif code in [61, 63, 65, 66, 67]: emoji, condition = "🌧️", "Rain"
-        elif code in [71, 73, 75, 77]: emoji, condition = "❄️", "Snow"
-        elif code in [80, 81, 82]: emoji, condition = "🌦️", "Showers"
-        elif code in [95, 96, 99]: emoji, condition = "⛈️", "Thunderstorm"
-        
-        return {"temp": temp, "emoji": emoji, "condition": condition, "name": resolved_name}
-    except Exception: return None
+        return f"{temp}°C", desc, icon
+    except Exception:
+        return "--°C", "Weather Unavailable", "☁️"
 
-def draw_weather_dashboard(city):
-    weather = get_weather(city)
-    current_time = datetime.now().strftime("%H:%M")
-    current_date = datetime.now().strftime("%A, %B %d")
-    html = f"<div style='text-align: center; padding: 150px 20px; font-family: \"Helvetica Neue\", Helvetica, Arial, sans-serif; color: white; background: #000000; height: 100vh;'>"
-    html += f"<h1 style='font-size: 10rem; margin: 0; font-weight: 200; letter-spacing: -5px;'>{current_time}</h1>"
-    html += f"<p style='font-size: 2rem; margin: 0 0 60px 0; font-weight: 300; opacity: 0.6;'>{current_date}</p>"
-    if weather:
-        html += f"<div style='display: inline-block; background: rgba(255,255,255,0.05); padding: 40px 60px; border-radius: 30px;'>"
-        html += f"<h2 style='font-size: 6rem; margin: 0;'>{weather['emoji']} {weather['temp']}°C</h2>"
-        html += f"<p style='font-size: 1.8rem; margin: 15px 0 0 0; font-weight: 300; opacity: 0.8;'>{weather['condition']} in {weather['name']}</p></div>"
-    html += "</div>"
+def draw_weather_dashboard(city="London", layout="Landscape"):
+    now = datetime.now()
+    time_str = now.strftime("%H:%M")
+    date_str = now.strftime("%A, %B %d").upper()
+    
+    temp, desc, icon = get_weather(city)
+    
+    # --- SMART ROTATION CSS ---
+    # If the TV is bolted to the wall sideways, we rotate the HTML wrapper 90 degrees
+    if layout == "Portrait (Sideways TV)":
+        wrapper_style = """
+            position: fixed; top: 50%; left: 50%; width: 100vh; height: 100vw; 
+            transform: translate(-50%, -50%) rotate(90deg); 
+            display: flex; flex-direction: column; justify-content: center; align-items: center; 
+            background-color: #000000; color: white; font-family: sans-serif; z-index: 10;
+        """
+        # Make the fonts slightly smaller since the screen is narrow
+        time_size, date_size, icon_size, temp_size, meta_size, brand_size = "18vw", "3vw", "6vw", "5vw", "1.5vw", "3vw"
+    
+    elif layout == "Portrait": # Native tablet/smart display
+        wrapper_style = """
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; 
+            display: flex; flex-direction: column; justify-content: center; align-items: center; 
+            background-color: #000000; color: white; font-family: sans-serif; z-index: 10;
+        """
+        time_size, date_size, icon_size, temp_size, meta_size, brand_size = "18vw", "3vw", "6vw", "5vw", "1.5vw", "3vw"
+        
+    else: # Standard Landscape
+        wrapper_style = """
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; 
+            display: flex; flex-direction: column; justify-content: center; align-items: center; 
+            background-color: #000000; color: white; font-family: sans-serif; z-index: 10;
+        """
+        time_size, date_size, icon_size, temp_size, meta_size, brand_size = "12vw", "2vw", "4vw", "3vw", "1vw", "2vw"
+
+    # --- HTML INJECTION ---
+    html = f"""
+    <div style="{wrapper_style}">
+        
+        <div style="font-size: {time_size}; font-weight: 900; letter-spacing: -2px; margin-bottom: -2vh; line-height: 1;">{time_str}</div>
+        <div style="font-size: {date_size}; color: #888888; letter-spacing: 4px; font-weight: 700; margin-bottom: 8vh;">{date_str}</div>
+        
+        <div style="display: flex; align-items: center; gap: 2vw; background-color: #0A0A0A; padding: 3vh 4vw; border-radius: 2vw; border: 2px solid #1A1A1A;">
+            <div style="font-size: {icon_size};">{icon}</div>
+            <div>
+                <div style="font-size: {temp_size}; font-weight: bold; line-height: 1;">{temp}</div>
+                <div style="font-size: {meta_size}; color: #666666; text-transform: uppercase; letter-spacing: 2px; margin-top: 0.5vh;">{city} • {desc}</div>
+            </div>
+        </div>
+        
+        <div style="position: absolute; bottom: 8vh; text-align: center;">
+            <div style="font-size: {brand_size}; font-weight: 900; letter-spacing: 3px;">SOUND<span style="color: #7C3AED;">SCREEN</span></div>
+            <div style="font-size: {meta_size}; color: #444444; letter-spacing: 4px; margin-top: 1vh; font-weight: 800;">LISTENING FOR MUSIC...</div>
+        </div>
+    </div>
+    """
     st.markdown(html, unsafe_allow_html=True)
