@@ -10,7 +10,7 @@ from cloud_utils import (
     get_current_song_from_cloud, log_manual_history, 
     init_pairing_code, check_pairing_status, 
     check_if_unpaired, unpair_from_cloud, check_subscription_status,
-    get_display_layout
+    get_display_layout 
 )
 
 # --- PAGE SETUP & KIOSK MODE CSS ---
@@ -142,7 +142,6 @@ else:
         if st.session_state.is_standby:
             draw_weather_dashboard(weather_city)
         elif st.session_state.current_poster:
-            # ⚡️ THE JPEG SPEED FIX ⚡️
             st.image(st.session_state.current_poster.convert('RGB'), use_container_width=True, output_format="JPEG")
         else:
             st.markdown(f"<h3 style='color:gray;text-align:center;margin-top:200px;'>Listening to Venue Cloud...<br><span style='font-size:12px;opacity:0.5;'>Venue: {current_venue_id}<br>Display: {current_display_id}</span></h3>", unsafe_allow_html=True)
@@ -160,6 +159,11 @@ else:
 
             # 1. Fetch both the song and the specific layout for THIS display
             current_layout = get_display_layout(current_venue_id, current_display_id)
+            
+            # Sanitization fallback just in case
+            if current_layout not in ["Portrait", "Landscape"]:
+                current_layout = "Landscape"
+
             track_found, artist_found = get_current_song_from_cloud(current_venue_id)
             
             if track_found and artist_found:
@@ -170,20 +174,20 @@ else:
                 layout_changed = (current_layout != st.session_state.last_orientation)
                 
                 if song_changed or layout_changed:
+                    # THE CACHE BUSTER! If layout changed, wipe the memory so it rebuilds properly.
+                    if layout_changed:
+                        st.toast(f"Cloud Sync: Screen is now {current_layout} 📲", icon="🔄")
+                        st.cache_data.clear() 
+
                     album_found = get_album_from_track(track_found, artist_found)
                     if album_found:
                         new_poster = create_poster(album_found, artist_found, current_layout)
                         
-                        # Only update internal state IF we actually made the poster successfully
                         if new_poster:
                             st.session_state.current_poster = new_poster
                             st.session_state.last_track = track_found
                             st.session_state.last_orientation = current_layout
                             st.session_state.is_standby = False
-                            
-                            # Tiny visual feedback just so we know the signal worked!
-                            if layout_changed and not song_changed:
-                                st.toast(f"Flipped to {current_layout} 🔄", icon="✅")
                                 
                     needs_rerun = True
 
