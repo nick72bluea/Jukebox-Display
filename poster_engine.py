@@ -10,10 +10,8 @@ import streamlit as st
 
 # --- SECURE CREDENTIAL FETCHER ---
 def get_cred(key):
-    # Try Railway/Server environment variables first
     if key in os.environ:
         return os.environ[key]
-    # Fallback to local Streamlit secrets
     try:
         return st.secrets[key]
     except Exception:
@@ -24,7 +22,6 @@ SPOTIPY_CLIENT_ID = get_cred("SPOTIPY_CLIENT_ID")
 SPOTIPY_CLIENT_SECRET = get_cred("SPOTIPY_CLIENT_SECRET")
 
 # --- TEXT HELPERS ---
-
 def clean_album_title(title):
     keywords = [" (deluxe", " [deluxe", " - deluxe", " (remaster", " [remaster", " - remaster", " (expanded", " [expanded", " - expanded", " (original", " [original", " - original"]
     lower_title = title.lower()
@@ -123,7 +120,6 @@ def create_poster(album_name, artist_name, orientation="Portrait"):
         poster_w, poster_h, padding = 1200, 1800, 70
         cover_size = poster_w - (padding * 2)
         
-        # ⚡️ SPEED OPTIMIZATION: Shrink -> Blur -> Stretch ⚡️
         tiny_bg = cover_img.resize((poster_w // 4, poster_h // 4))
         tiny_bg = tiny_bg.filter(ImageFilter.GaussianBlur(radius=10))
         bg_img = tiny_bg.resize((poster_w, poster_h), resample=Image.Resampling.BICUBIC)
@@ -179,12 +175,14 @@ def create_poster(album_name, artist_name, orientation="Portrait"):
             color = cover_img.crop((i * (cover_img.width // 4), 0, (i + 1) * (cover_img.width // 4), cover_img.height)).resize((1, 1), resample=Image.Resampling.LANCZOS).getpixel((0, 0))
             draw.rectangle([padding + (i * segment_w), bar_y, padding + ((i + 1) * segment_w), bar_y + 20], fill=color)
 
+        # ⚡️ THE ROTATION FIX: Turn the poster 90 degrees before serving it ⚡️
+        poster = poster.rotate(90, expand=True)
+
     else:
         # --- LANDSCAPE LOGIC ---
         poster_w, poster_h, padding = 1920, 1080, 80
         cover_size = 800 
         
-        # ⚡️ SPEED OPTIMIZATION: Shrink -> Blur -> Stretch ⚡️
         tiny_bg = cover_img.resize((poster_w // 4, poster_h // 4))
         tiny_bg = tiny_bg.filter(ImageFilter.GaussianBlur(radius=12))
         bg_img = tiny_bg.resize((poster_w, poster_h), resample=Image.Resampling.BICUBIC)
