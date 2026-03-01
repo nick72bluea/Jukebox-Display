@@ -29,7 +29,7 @@ def get_weather(city):
 
 def draw_weather_dashboard(city="London", layout="Landscape"):
     now = datetime.now()
-    time_str = now.strftime("%H:%M")
+    # Notice we removed the Python time_str here! We let JS handle it below.
     date_str = now.strftime("%A, %B %d").upper()
     
     temp, desc, icon = get_weather(city)
@@ -51,7 +51,7 @@ def draw_weather_dashboard(city="London", layout="Landscape"):
     # --- HTML INJECTION ---
     # ZERO indentation allowed here to prevent Streamlit from creating code blocks
     html = f"""<div style="{wrapper_style}">
-<div style="font-size: {time_size}; font-weight: 900; letter-spacing: -2px; margin-bottom: -2vh; line-height: 1;">{time_str}</div>
+<div id="live-time" style="font-size: {time_size}; font-weight: 900; letter-spacing: -2px; margin-bottom: -2vh; line-height: 1;"></div>
 <div style="font-size: {date_size}; color: #888888; letter-spacing: 4px; font-weight: 700; margin-bottom: 8vh;">{date_str}</div>
 <div style="display: flex; align-items: center; gap: 2vw; background-color: #0A0A0A; padding: 3vh 4vw; border-radius: 2vw; border: 2px solid #1A1A1A;">
 <div style="font-size: {icon_size};">{icon}</div>
@@ -64,6 +64,16 @@ def draw_weather_dashboard(city="London", layout="Landscape"):
 <div style="font-size: {brand_size}; font-weight: 900; letter-spacing: 3px;">SOUND<span style="color: #7C3AED;">SCREEN</span></div>
 <div style="font-size: {meta_size}; color: #444444; letter-spacing: 4px; margin-top: 1vh; font-weight: 800;">LISTENING FOR MUSIC...</div>
 </div>
-</div>"""
+</div>
+<script>
+    function updateTime() {{
+        const now = new Date();
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        document.getElementById('live-time').innerText = hours + ':' + minutes;
+    }}
+    setInterval(updateTime, 1000);
+    updateTime();
+</script>"""
 
     st.markdown(html, unsafe_allow_html=True)
