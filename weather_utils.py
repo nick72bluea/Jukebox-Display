@@ -50,23 +50,22 @@ def draw_weather_dashboard(city="London", layout="Landscape"):
 
     # --- HTML INJECTION ---
     # Pushed to the left margin so Markdown doesn't treat it as a code block
-    html = f"""
-<div style="{wrapper_style}">
-    <div style="font-size: {time_size}; font-weight: 900; letter-spacing: -2px; margin-bottom: -2vh; line-height: 1;">{time_str}</div>
-    <div style="font-size: {date_size}; color: #888888; letter-spacing: 4px; font-weight: 700; margin-bottom: 8vh;">{date_str}</div>
-    
-    <div style="display: flex; align-items: center; gap: 2vw; background-color: #0A0A0A; padding: 3vh 4vw; border-radius: 2vw; border: 2px solid #1A1A1A;">
-        <div style="font-size: {icon_size};">{icon}</div>
-        <div>
-            <div style="font-size: {temp_size}; font-weight: bold; line-height: 1;">{temp}</div>
-            <div style="font-size: {meta_size}; color: #666666; text-transform: uppercase; letter-spacing: 2px; margin-top: 0.5vh;">{city} • {desc}</div>
-        </div>
-    </div>
-    
-    <div style="position: absolute; bottom: 8vh; text-align: center;">
-        <div style="font-size: {brand_size}; font-weight: 900; letter-spacing: 3px;">SOUND<span style="color: #7C3AED;">SCREEN</span></div>
-        <div style="font-size: {meta_size}; color: #444444; letter-spacing: 4px; margin-top: 1vh; font-weight: 800;">LISTENING FOR MUSIC...</div>
-    </div>
+    # --- HTML INJECTION ---
+    # ZERO indentation allowed here to prevent Streamlit from creating code blocks
+    html = f"""<div style="{wrapper_style}">
+<div style="font-size: {time_size}; font-weight: 900; letter-spacing: -2px; margin-bottom: -2vh; line-height: 1;">{time_str}</div>
+<div style="font-size: {date_size}; color: #888888; letter-spacing: 4px; font-weight: 700; margin-bottom: 8vh;">{date_str}</div>
+<div style="display: flex; align-items: center; gap: 2vw; background-color: #0A0A0A; padding: 3vh 4vw; border-radius: 2vw; border: 2px solid #1A1A1A;">
+<div style="font-size: {icon_size};">{icon}</div>
+<div>
+<div style="font-size: {temp_size}; font-weight: bold; line-height: 1;">{temp}</div>
+<div style="font-size: {meta_size}; color: #666666; text-transform: uppercase; letter-spacing: 2px; margin-top: 0.5vh;">{city} • {desc}</div>
 </div>
-"""
+</div>
+<div style="position: absolute; bottom: 8vh; text-align: center;">
+<div style="font-size: {brand_size}; font-weight: 900; letter-spacing: 3px;">SOUND<span style="color: #7C3AED;">SCREEN</span></div>
+<div style="font-size: {meta_size}; color: #444444; letter-spacing: 4px; margin-top: 1vh; font-weight: 800;">LISTENING FOR MUSIC...</div>
+</div>
+</div>"""
+
     st.markdown(html, unsafe_allow_html=True)
