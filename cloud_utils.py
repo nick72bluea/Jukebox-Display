@@ -21,9 +21,10 @@ def get_current_song_from_cloud(venue_id):
         if response.status_code == 200:
             data = response.json()
             if data and 'track' in data and 'artist' in data:
-                return data['track'], data['artist']
+                # ⚡️ NEW: We now return the exact timestamp of the push!
+                return data['track'], data['artist'], data.get('timestamp', 0)
     except Exception: pass 
-    return None, None
+    return None, None, 0
 
 def log_manual_history(venue_id, album, artist):
     record_id = str(int(time.time() * 1000))
