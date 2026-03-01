@@ -176,9 +176,9 @@ def create_poster(album_name, artist_name, orientation="Portrait"):
             color = cover_img.crop((i * (cover_img.width // 4), 0, (i + 1) * (cover_img.width // 4), cover_img.height)).resize((1, 1), resample=Image.Resampling.LANCZOS).getpixel((0, 0))
             draw.rectangle([padding + (i * segment_w), bar_y, padding + ((i + 1) * segment_w), bar_y + 20], fill=color)
 
-        # ⚡️ THE SMART ROTATION CHECK ⚡️
+        # ⚡️ FIXED: Rotates 270 degrees (or -90) instead of 90 to match your TV mount! ⚡️
         if orientation == "Portrait (Sideways TV)":
-            poster = poster.rotate(90, expand=True)
+            poster = poster.rotate(270, expand=True)
 
     else:
         # --- LANDSCAPE LOGIC ---
