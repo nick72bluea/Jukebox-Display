@@ -10,7 +10,7 @@ from cloud_utils import (
     get_current_song_from_cloud, log_manual_history, 
     init_pairing_code, check_pairing_status, 
     check_if_unpaired, unpair_from_cloud, check_subscription_status,
-    get_display_layout 
+    get_display_layout, get_venue_settings # <-- NEW IMPORT
 )
 
 # --- PAGE SETUP & KIOSK MODE CSS ---
@@ -81,6 +81,10 @@ if 'last_heard_time' not in st.session_state: st.session_state.last_heard_time =
 if 'is_standby' not in st.session_state: st.session_state.is_standby = False
 if 'last_orientation' not in st.session_state: st.session_state.last_orientation = "Landscape"
 
+# --- NEW: GLOBAL SETTINGS STATE ---
+if 'venue_city' not in st.session_state: st.session_state.venue_city = "London"
+if 'venue_timeout' not in st.session_state: st.session_state.venue_timeout = 5
+
 # ==========================================
 # --- CORE APP LOGIC (ROUTING) ---
 # ==========================================
@@ -136,12 +140,9 @@ else:
 
     else:
         # ✅ DUMB GLASS MODE ✅
-        weather_city = "London"
-        # ⚡️ TEMPORARILY DROPPED TO 1 MINUTE FOR TESTING ⚡️
-        idle_timeout_mins = 1
-
         if st.session_state.is_standby:
-            draw_weather_dashboard(weather_city, st.session_state.last_orientation)
+            # Passes the live dynamic city instead of a hardcoded string!
+            draw_weather_dashboard(st.session_state.venue_city, st.session_state.last_orientation)
         elif st.session_state.current_poster:
             st.image(st.session_state.current_poster.convert('RGB'), use_container_width=True, output_format="JPEG")
         else:
@@ -158,21 +159,31 @@ else:
             if not check_subscription_status(current_venue_id):
                 st.rerun()
 
+            # 1. Fetch the master global settings
+            cloud_city, cloud_timeout = get_venue_settings(current_venue_id)
+            
+            # If the user updated the settings, save them to memory!
+            if cloud_city != st.session_state.venue_city or cloud_timeout != st.session_state.venue_timeout:
+                st.session_state.venue_city = cloud_city
+                st.session_state.venue_timeout = cloud_timeout
+                
+                # If we are currently looking at the weather screen and the city changes, redraw it!
+                if st.session_state.is_standby:
+                    needs_rerun = True
+
+            # 2. Fetch both the song and the specific layout for THIS display
             current_layout = get_display_layout(current_venue_id, current_display_id)
+            
             if current_layout not in ["Landscape", "Portrait", "Portrait (Sideways TV)"]:
                 current_layout = "Landscape"
 
             track_found, artist_found = get_current_song_from_cloud(current_venue_id)
             
             if track_found and artist_found:
+                st.session_state.last_heard_time = time.time() 
                 
-                # Check if the song or layout changed
                 song_changed = (track_found != st.session_state.last_track)
                 layout_changed = (current_layout != st.session_state.last_orientation)
-                
-                # ⚡️ THE BUG FIX: Only reset the timer if a completely NEW song plays ⚡️
-                if song_changed:
-                    st.session_state.last_heard_time = time.time()
                 
                 if song_changed or layout_changed:
                     if layout_changed:
@@ -191,12 +202,13 @@ else:
                                 
                     needs_rerun = True
 
+            # 3. Dynamic Timeout Check using our new global setting
             time_since_last_song = time.time() - st.session_state.last_heard_time
-            if time_since_last_song > (idle_timeout_mins * 60):
+            if time_since_last_song > (st.session_state.venue_timeout * 60):
                 if not st.session_state.is_standby:
                     st.session_state.is_standby = True
                     st.session_state.current_poster = None
-                    # We NO LONGER clear last_track here, so it remembers the old song and won't re-trigger it
+                    st.session_state.last_track = None
                     needs_rerun = True
                     
             if needs_rerun:
