@@ -36,8 +36,8 @@ def draw_weather_dashboard(city="London", layout="Landscape"):
     
     # --- SMART ROTATION CSS ---
     if layout == "Portrait (Sideways TV)":
-        # ⚡️ FIXED: Flipped to -90deg so it rotates the correct way for your TV mount! ⚡️
-        wrapper_style = "position: fixed; top: 50%; left: 50%; width: 100vh; height: 100vw; transform: translate(-50%, -50%) rotate(-90deg); display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: #000000; color: white; font-family: sans-serif; z-index: 10;"
+        # ⚡️ FIXED: Flipped from -90deg to 90deg so it matches the poster rotation perfectly! ⚡️
+        wrapper_style = "position: fixed; top: 50%; left: 50%; width: 100vh; height: 100vw; transform: translate(-50%, -50%) rotate(90deg); display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: #000000; color: white; font-family: sans-serif; z-index: 10;"
         time_size, date_size, icon_size, temp_size, meta_size, brand_size = "18vw", "3vw", "6vw", "5vw", "1.5vw", "3vw"
     
     elif layout == "Portrait": # Native tablet/smart display
