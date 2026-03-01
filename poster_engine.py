@@ -116,8 +116,9 @@ def create_poster(album_name, artist_name, orientation="Portrait"):
             except IOError: continue
         return ImageFont.load_default()
 
-    if orientation == "Portrait":
-        poster_w, poster_h, padding = 1200, 1800, 70
+    if orientation in ["Portrait", "Portrait (Sideways TV)"]:
+        # --- TRUE 1080x1920 PIXEL MATH ---
+        poster_w, poster_h, padding = 1080, 1920, 90 
         cover_size = poster_w - (padding * 2)
         
         tiny_bg = cover_img.resize((poster_w // 4, poster_h // 4))
@@ -134,8 +135,8 @@ def create_poster(album_name, artist_name, orientation="Portrait"):
         code_w = int((90 / spotify_code_img.height) * spotify_code_img.width)
         poster.paste(spotify_code_img.resize((code_w, 90)), (padding, code_y), spotify_code_img.resize((code_w, 90)))
 
-        title_size = 34 if len(clean_name) > 30 else (38 if len(clean_name) > 20 else 42)
-        artist_size = 45 if len(artist_name) > 35 else (60 if len(artist_name) > 25 else 75)
+        title_size = 30 if len(clean_name) > 30 else (34 if len(clean_name) > 20 else 38)
+        artist_size = 40 if len(artist_name) > 35 else (55 if len(artist_name) > 25 else 70)
         
         max_text_width = (poster_w - padding) - (padding + code_w + 20)
         new_y_after_artist = draw_wrapped_text(draw, artist_name.upper(), get_safe_font(artist_size), max_text_width, poster_w - padding, code_y - 12, "white", "right")
@@ -148,12 +149,12 @@ def create_poster(album_name, artist_name, orientation="Portrait"):
         track_lines = max(1, (len(display_tracks) + 1) // 2)
         
         optimal_spacing = available_space // track_lines if track_lines > 0 else 50
-        track_spacing = min(40, optimal_spacing)
+        track_spacing = min(45, optimal_spacing)
         
         if track_spacing < 35:
             display_tracks = display_tracks[:18]
             track_lines = max(1, (len(display_tracks) + 1) // 2)
-            track_spacing = min(50, available_space // track_lines) if track_lines > 0 else 50
+            track_spacing = min(45, available_space // track_lines) if track_lines > 0 else 45
 
         max_col_width = (poster_w - (padding * 2)) // 2 - 20 
         font_tracks = get_safe_font(22)
@@ -175,8 +176,9 @@ def create_poster(album_name, artist_name, orientation="Portrait"):
             color = cover_img.crop((i * (cover_img.width // 4), 0, (i + 1) * (cover_img.width // 4), cover_img.height)).resize((1, 1), resample=Image.Resampling.LANCZOS).getpixel((0, 0))
             draw.rectangle([padding + (i * segment_w), bar_y, padding + ((i + 1) * segment_w), bar_y + 20], fill=color)
 
-        # ⚡️ THE ROTATION FIX: Turn the poster 90 degrees before serving it ⚡️
-        poster = poster.rotate(90, expand=True)
+        # ⚡️ THE SMART ROTATION CHECK ⚡️
+        if orientation == "Portrait (Sideways TV)":
+            poster = poster.rotate(90, expand=True)
 
     else:
         # --- LANDSCAPE LOGIC ---
