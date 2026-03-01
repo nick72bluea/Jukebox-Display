@@ -137,7 +137,7 @@ else:
     else:
         # ✅ DUMB GLASS MODE ✅
         weather_city = "London"
-        idle_timeout_mins = 5
+        idle_timeout_mins = 1
 
         if st.session_state.is_standby:
             draw_weather_dashboard(weather_city, st.session_state.last_orientation)
