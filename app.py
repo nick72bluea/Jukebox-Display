@@ -10,7 +10,7 @@ from cloud_utils import (
     get_current_song_from_cloud, log_manual_history, 
     init_pairing_code, check_pairing_status, 
     check_if_unpaired, unpair_from_cloud, check_subscription_status,
-    get_display_layout, get_venue_settings # <-- NEW IMPORT
+    get_display_layout, get_venue_settings
 )
 
 # --- PAGE SETUP & KIOSK MODE CSS ---
@@ -76,12 +76,13 @@ def clear_connection():
 
 # --- INIT SESSION STATE ---
 if 'last_track' not in st.session_state: st.session_state.last_track = None
+if 'last_timestamp' not in st.session_state: st.session_state.last_timestamp = 0
 if 'current_poster' not in st.session_state: st.session_state.current_poster = None
 if 'last_heard_time' not in st.session_state: st.session_state.last_heard_time = time.time()
 if 'is_standby' not in st.session_state: st.session_state.is_standby = False
 if 'last_orientation' not in st.session_state: st.session_state.last_orientation = "Landscape"
 
-# --- NEW: GLOBAL SETTINGS STATE ---
+# --- GLOBAL SETTINGS STATE ---
 if 'venue_city' not in st.session_state: st.session_state.venue_city = "London"
 if 'venue_timeout' not in st.session_state: st.session_state.venue_timeout = 5
 
@@ -121,7 +122,6 @@ if not current_venue_id or not current_display_id:
     st.rerun() 
 
 else:
-    # 🛑 THE SUBSCRIPTION CHECK 🛑
     is_pro = check_subscription_status(current_venue_id)
     
     if not is_pro:
@@ -141,7 +141,6 @@ else:
     else:
         # ✅ DUMB GLASS MODE ✅
         if st.session_state.is_standby:
-            # Passes the live dynamic city instead of a hardcoded string!
             draw_weather_dashboard(st.session_state.venue_city, st.session_state.last_orientation)
         elif st.session_state.current_poster:
             st.image(st.session_state.current_poster.convert('RGB'), use_container_width=True, output_format="JPEG")
@@ -159,33 +158,32 @@ else:
             if not check_subscription_status(current_venue_id):
                 st.rerun()
 
-            # 1. Fetch the master global settings
             cloud_city, cloud_timeout = get_venue_settings(current_venue_id)
             
-            # If the user updated the settings, save them to memory!
             if cloud_city != st.session_state.venue_city or cloud_timeout != st.session_state.venue_timeout:
                 st.session_state.venue_city = cloud_city
                 st.session_state.venue_timeout = cloud_timeout
-                
-                # If we are currently looking at the weather screen and the city changes, redraw it!
                 if st.session_state.is_standby:
                     needs_rerun = True
 
-            # 2. Fetch both the song and the specific layout for THIS display
             current_layout = get_display_layout(current_venue_id, current_display_id)
-            
             if current_layout not in ["Landscape", "Portrait", "Portrait (Sideways TV)"]:
                 current_layout = "Landscape"
 
-            track_found, artist_found = get_current_song_from_cloud(current_venue_id)
+            track_found, artist_found, timestamp_found = get_current_song_from_cloud(current_venue_id)
             
             if track_found and artist_found:
-                st.session_state.last_heard_time = time.time() 
-                
                 song_changed = (track_found != st.session_state.last_track)
                 layout_changed = (current_layout != st.session_state.last_orientation)
+                time_changed = (timestamp_found != st.session_state.last_timestamp)
                 
-                if song_changed or layout_changed:
+                # ⚡️ THE FIX: Only reset the timer if a brand new push hit the cloud! ⚡️
+                if song_changed or time_changed:
+                    st.session_state.last_heard_time = time.time()
+                    st.session_state.last_timestamp = timestamp_found
+                
+                # Wake up and draw if it's a new song, a new layout, or if the screen was asleep and they pushed the same song again
+                if song_changed or layout_changed or (time_changed and st.session_state.is_standby):
                     if layout_changed:
                         st.toast(f"Cloud Sync: Screen is now {current_layout} 📲", icon="🔄")
                         st.cache_data.clear() 
@@ -202,13 +200,12 @@ else:
                                 
                     needs_rerun = True
 
-            # 3. Dynamic Timeout Check using our new global setting
+            # 3. Dynamic Timeout Countdown
             time_since_last_song = time.time() - st.session_state.last_heard_time
             if time_since_last_song > (st.session_state.venue_timeout * 60):
                 if not st.session_state.is_standby:
                     st.session_state.is_standby = True
                     st.session_state.current_poster = None
-                    st.session_state.last_track = None
                     needs_rerun = True
                     
             if needs_rerun:
