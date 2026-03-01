@@ -148,10 +148,7 @@ else:
 
         @st.fragment(run_every=1)
         def background_listener():
-            # --- ADD THIS TEMPORARY DEBUG LINE ---
-            current_layout = get_display_layout(current_venue_id, current_display_id)
-            st.markdown(f"<div style='position: fixed; top: 10px; right: 10px; background: red; color: white; padding: 10px; z-index: 9999;'>DEBUG - Cloud says: {current_layout} | Memory says: {st.session_state.last_orientation}</div>", unsafe_allow_html=True)
-            # -------------------------------------
+           
             needs_rerun = False
             
             if check_if_unpaired(current_venue_id, current_display_id):
