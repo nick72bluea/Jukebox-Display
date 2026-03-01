@@ -9,7 +9,8 @@ from poster_engine import create_poster, get_album_from_track
 from cloud_utils import (
     get_current_song_from_cloud, log_manual_history, 
     init_pairing_code, check_pairing_status, 
-    check_if_unpaired, unpair_from_cloud, check_subscription_status
+    check_if_unpaired, unpair_from_cloud, check_subscription_status,
+    get_display_layout  # <-- WE ADDED THE NEW HELPER HERE
 )
 
 # --- PAGE SETUP & KIOSK MODE CSS ---
@@ -30,7 +31,7 @@ hide_st_style = """
             [data-testid="stToolbar"] { display: none !important; }
             footer { display: none !important; }
             header[data-testid="stHeader"] { display: none !important; }
-            [data-testid="collapsedControl"] { display: none !important; } /* Killed the arrow */
+            [data-testid="collapsedControl"] { display: none !important; } 
 
             .stApp, .main { background-color: #000000 !important; }
             
@@ -78,6 +79,7 @@ if 'last_track' not in st.session_state: st.session_state.last_track = None
 if 'current_poster' not in st.session_state: st.session_state.current_poster = None
 if 'last_heard_time' not in st.session_state: st.session_state.last_heard_time = time.time()
 if 'is_standby' not in st.session_state: st.session_state.is_standby = False
+if 'last_orientation' not in st.session_state: st.session_state.last_orientation = "Landscape"
 
 # ==========================================
 # --- CORE APP LOGIC (ROUTING) ---
@@ -134,12 +136,8 @@ else:
 
     else:
         # ✅ DUMB GLASS MODE ✅
-        # (Temporarily falling back to URL parameter so your portrait screen doesn't break)
-        display_orientation = st.query_params.get("layout", "Landscape")
         weather_city = "London"
         idle_timeout_mins = 5
-
-        if 'last_orientation' not in st.session_state: st.session_state.last_orientation = display_orientation
 
         if st.session_state.is_standby:
             draw_weather_dashboard(weather_city)
@@ -159,21 +157,25 @@ else:
             if not check_subscription_status(current_venue_id):
                 st.rerun()
 
+            # 1. Fetch both the song and the specific layout for THIS display
+            current_layout = get_display_layout(current_venue_id, current_display_id)
             track_found, artist_found = get_current_song_from_cloud(current_venue_id)
+            
             if track_found and artist_found:
                 st.session_state.last_heard_time = time.time() 
                 
+                # 2. Check if either the song changed, OR the landlord changed the layout
                 song_changed = (track_found != st.session_state.last_track)
-                layout_changed = (display_orientation != st.session_state.last_orientation)
+                layout_changed = (current_layout != st.session_state.last_orientation)
                 
                 if song_changed or layout_changed:
                     st.session_state.last_track = track_found
-                    st.session_state.last_orientation = display_orientation
+                    st.session_state.last_orientation = current_layout
                     st.session_state.is_standby = False
                     
                     album_found = get_album_from_track(track_found, artist_found)
                     if album_found:
-                        new_poster = create_poster(album_found, artist_found, display_orientation)
+                        new_poster = create_poster(album_found, artist_found, current_layout)
                         if new_poster:
                             st.session_state.current_poster = new_poster
                     needs_rerun = True
