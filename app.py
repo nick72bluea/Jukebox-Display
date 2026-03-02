@@ -14,7 +14,8 @@ from cloud_utils import (
 )
 
 # --- PAGE SETUP & KIOSK MODE CSS ---
-st.set_page_config(page_title="SoundScreen TV", layout="wide", initial_sidebar_state="collapsed")
+
+st.set_page_config(page_title="SoundScreen TV", page_icon="favicon.png", layout="wide", initial_sidebar_state="collapsed")
 
 hide_st_style = """
             <style>
